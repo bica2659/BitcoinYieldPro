@@ -1,0 +1,255 @@
+version: '3.8'
+
+services:
+  # Bitcoin Core (Regtest for development)
+  bitcoin-core:
+    image: ruimarinho/bitcoin-core:latest
+    container_name: bitcoin-core
+    ports:
+      - "18443:18443"  # Regtest RPC
+      - "18444:18444"  # Regtest P2P
+    volumes:
+      - bitcoin-data:/home/bitcoin/.bitcoin
+    environment:
+      BITCOIN_DATA: /home/bitcoin/.bitcoin
+    command: >
+      bitcoind
+      -regtest=1
+      -rpcallowip=0.0.0.0/0
+      -rpcbind=0.0.0.0
+      -rpcuser=bitcoin
+      -rpcpassword=password123
+      -fallbackfee=0.00001
+      -server=1
+      -txindex=1
+      -addresstype=bech32
+    restart: unless-stopped
+
+  # Lightning Network Daemon
+  lnd:
+    image: lightninglabs/lnd:latest
+    container_name: lnd
+    ports:
+      - "9735:9735"  # P2P
+      - "10009:10009" # gRPC
+      - "8080:8080"   # REST
+    volumes:
+      - lnd-data:/home/lnd/.lnd
+    depends_on:
+      - bitcoin-core
+    environment:
+      - LND_NETWORK=regtest
+    command: >
+      lnd
+      --bitcoin.active
+      --bitcoin.regtest
+      --bitcoin.node=bitcoind
+      --bitcoind.rpchost=bitcoin-core:18443
+      --bitcoind.rpcuser=bitcoin
+      --bitcoind.rpcpass=password123
+      --bitcoind.zmqpubrawblock=tcp://bitcoin-core:28332
+      --bitcoind.zmqpubrawtx=tcp://bitcoin-core:28333
+      --restlisten=0.0.0.0:8080
+      --rpclisten=0.0.0.0:10009
+      --listen=0.0.0.0:9735
+    restart: unless-stopped
+
+  # MongoDB for application data
+  mongodb:
+    image: mongo:7-jammy
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_DATABASE: bitcoinyield
+    restart: unless-stopped
+
+  # Redis for caching and sessions
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --requirepass password123
+    restart: unless-stopped
+
+  # Core Blockchain Node
+  core-node:
+    image: coreblockchain/core:latest
+    container_name: core-node
+    ports:
+      - "8545:8545"   # JSON-RPC
+      - "8546:8546"   # WebSocket
+      - "30303:30303" # P2P
+    volumes:
+      - core-data:/data
+    environment:
+      - CORE_NETWORK=testnet
+      - CORE_RPC_HOST=0.0.0.0
+      - CORE_RPC_PORT=8545
+      - CORE_WS_HOST=0.0.0.0
+      - CORE_WS_PORT=8546
+    command: >
+      --testnet
+      --http
+      --http.addr=0.0.0.0
+      --http.port=8545
+      --http.api=eth,net,web3,personal,txpool
+      --ws
+      --ws.addr=0.0.0.0
+      --ws.port=8546
+      --ws.api=eth,net,web3,personal,txpool
+      --datadir=/data
+      --syncmode=full
+    restart: unless-stopped
+
+  # Rootstock (RSK) Node for smart contracts
+  rsk-node:
+    image: rsksmart/rskj:latest
+    container_name: rsk-node
+    ports:
+      - "4444:4444"   # RPC
+      - "5050:5050"   # WebSocket
+    volumes:
+      - rsk-data:/var/lib/rsk
+    environment:
+      - RSKJ_NETWORK=regtest
+    restart: unless-stopped
+
+  # Backend API Server
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backend
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - MONGODB_URI=mongodb://admin:password123@mongodb:27017/bitcoinyield?authSource=admin
+      - REDIS_URL=redis://redis:6379
+      - BITCOIN_RPC_URL=http://bitcoin:password123@bitcoin-core:18443
+      - LND_HOST=lnd:10009
+      - CORE_RPC_URL=http://core-node:8545
+      - CORE_WS_URL=ws://core-node:8546
+      - RSK_RPC_URL=http://rsk-node:4444ND_HOST=lnd:10009
+      - RSK_RPC_URL=http://rsk-node:4444
+      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
+    depends_on:
+      - mongodb
+      - redis
+      - bitcoin-core
+      - lnd
+      - rsk-node
+    restart: unless-stopped
+    develop:
+      watch:
+        - action: sync
+          path: ./backend
+          target: /app
+        - action: rebuild
+          path: ./backend/package.json
+
+  # Frontend React Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://localhost:3001
+      - VITE_WS_URL=ws://localhost:3001
+    depends_on:
+      - backend
+    restart: unless-stopped
+    develop:
+      watch:
+        - action: sync
+          path: ./frontend
+          target: /app
+        - action: rebuild
+          path: ./frontend/package.json
+
+  # Nginx reverse proxy (production-like setup)
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+    profiles:
+      - production
+
+  # Prometheus for monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # Grafana for metrics visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3002:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+volumes:
+  bitcoin-data:
+    driver: local
+  lnd-data:
+    driver: local
+  mongodb-data:
+    driver: local
+  redis-data:
+    driver: local
+  rsk-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+networks:
+  default:
+    name: bitcoinyield-network
+	
