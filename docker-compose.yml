@@ -150,6 +150,7 @@ services:
       - redis
       - bitcoin-core
       - lnd
+      - core-node
       - rsk-node
     restart: unless-stopped
     develop:
@@ -242,6 +243,8 @@ volumes:
     driver: local
   redis-data:
     driver: local
+  core-data:
+    driver: local
   rsk-data:
     driver: local
   prometheus-data:
@@ -252,4 +255,3 @@ volumes:
 networks:
   default:
     name: bitcoinyield-network
-	
