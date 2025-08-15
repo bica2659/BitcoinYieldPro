@@ -1829,6 +1829,87 @@
                 }
             });
         }
+        // === ADD THIS NEW CODE HERE ===
+    
+    // Professional demo mode with realistic data
+    let demoMode = true;
+
+    // Enhanced wallet connection
+    function connectWallet() {
+        if (demoMode) {
+            // Simulate successful connection
+            document.getElementById('walletBtn').textContent = 'Connected: Core Mainnet';
+            document.getElementById('walletBtn').style.background = 'linear-gradient(45deg, #22c55e, #16a34a)';
+            showNotification('Connected to Core Mainnet successfully!', 'success');
+            document.getElementById('walletStatus').style.background = '#22c55e';
+            
+            // Update status to show "live" connection
+            updateConnectionStatus();
+            return true;
+        }
+    }
+
+    function updateConnectionStatus() {
+        // Add live connection indicators
+        const statusPanel = document.getElementById('statusPanel');
+        statusPanel.innerHTML += `
+            <div class="status-item">
+                <span>Contract</span>
+                <span style="font-size: 0.7rem; color: #f7931e;">0x9410...f2aa</span>
+            </div>
+            <div class="status-item">
+                <span>Network</span>
+                <span style="color: #22c55e;">Core Mainnet</span>
+            </div>
+        `;
+    }
+
+    // Real BTC price updates
+    async function updateRealTimeData() {
+        try {
+            const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');
+            const data = await response.json();
+            const btcPrice = data.bitcoin.usd;
+            
+            // Update with real BTC price
+            const newUsdValue = (appState.treasuryData.totalBTC * btcPrice);
+            document.getElementById('treasuryUSD').textContent = 
+                '$' + (newUsdValue / 1000000).toFixed(1) + 'M';
+                
+            // Add timestamp if element exists
+            const lastUpdateEl = document.getElementById('lastUpdate');
+            if (lastUpdateEl) {
+                lastUpdateEl.textContent = new Date().toLocaleTimeString();
+            }
+        } catch (error) {
+            console.error('Price fetch failed:', error);
+        }
+    }
+
+    // Enhanced demo contract interactions
+    function deployContract(contractType) {
+        showNotification(`Deploying ${contractType} to Core Mainnet...`, 'warning');
+        
+        setTimeout(() => {
+            showNotification(`${contractType} deployed successfully! Gas: 0.003 CORE`, 'success');
+            
+            // Show realistic transaction hash
+            const txHash = '0x' + Math.random().toString(16).substr(2, 64);
+            setTimeout(() => {
+                showNotification(`TX: ${txHash.slice(0, 10)}...${txHash.slice(-6)}`, 'success');
+            }, 1000);
+        }, 2000);
+    }
+
+    // Auto-start real-time updates
+    setInterval(updateRealTimeData, 30000); // Update every 30 seconds
+    updateRealTimeData(); // Initial update
+
+    // === END NEW CODE ===
+    
+    </script>
+</body>
+</html>
     </script>
 </body>
 </html>
