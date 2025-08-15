@@ -28,18 +28,18 @@ contract CoreYieldVault is ReentrancyGuard, Pausable, Ownable {
     event FeesCollected(uint256 managementFee, uint256 performanceFee);
 
     // Core blockchain specific interfaces
-    interface ICoreStaking {
-        function delegate(address validator, uint256 amount) external;
-        function undelegate(address validator, uint256 amount) external;
-        function claimRewards() external returns (uint256);
-        function getRewards(address delegator) external view returns (uint256);
-    }
+interface ICoreStaking {
+    function delegate(address validator, uint256 amount) external;
+    function undelegate(address validator, uint256 amount) external;
+    function claimRewards() external returns (uint256);
+    function getRewards(address delegator) external view returns (uint256);
+}
 
-    interface ICoreBridge {
-        function depositBTC(uint256 amount) external payable;
-        function withdrawBTC(uint256 amount) external;
-        function getBTCBalance(address user) external view returns (uint256);
-    }
+interface ICoreBridge {
+    function depositBTC(uint256 amount) external payable;
+    function withdrawBTC(uint256 amount) external;
+    function getBTCBalance(address user) external view returns (uint256);
+}
 
     // State variables
     IERC20 public immutable coreBTC; // Wrapped Bitcoin on Core
