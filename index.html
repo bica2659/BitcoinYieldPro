@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SOLANA $5 → $5000 SNIPER</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  body { background: linear-gradient(135deg, #000428, #004e92); color: white; font-family: 'Courier New', monospace; }
+  .glow { text-shadow: 0 0 20px #00ff88; }
+  .profit { color: #00ff88; }
+  }
+  .loss { color: #ff0066; }
+</style>
+</head>
+<body class="min-h-screen p-6">
+
+<div class="max-w-6xl mx-auto">
+  <h1 class="text-6xl font-bold text-center glow mb-2">SOLANA SNIPER EMPIRE</h1>
+  <p class="text-center text-xl mb-8">Wallet: DepUCDTS7FZMYr4CcKTLFmFW1A5UunassetSbg2eC2H</p>
+
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+    <div class="bg-black/50 backdrop-blur border border-green-500/30 rounded-2xl p-6 text-center">
+      <div class="text-4xl font-bold profit" id="balance">$20.00</div>
+      <div class="text-gray-400">Current Balance</div>
+    </div>
+    <div class="bg-black/50 backdrop-blur border border-yellow-500/30 rounded-2xl p-6 text-center">
+      <div class="text-4xl font-bold" id="trades">7</div>
+      <div class="text-gray-400">Total Trades</div>
+    </div>
+    <div class="bg-black/50 backdrop-blur border border-cyan-500/30 rounded-2xl p-6 text-center">
+      <div class="text-4xl font-bold profit" id="profit">+342%</div>
+      <div class="text-gray-400">Total Profit</div>
+    </div>
+    <div class="bg-black/50 backdrop-blur border border-purple-500/30 rounded-2xl p-6 text-center">
+      <div class="text-4xl font-bold" id="size">$5.00</div>
+      <div class="text-gray-400">Current Trade Size</div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <div class="bg-black/60 backdrop-blur rounded-2xl p-8 border border-white/10">
+      <h2 class="text-3xl glow mb-6">Live Trade Log</h2>
+      <div id="log" class="space-y-3 text-lg"></div>
+    </div>
+
+    <div class="bg-black/60 backdrop-blur rounded-2xl p-8 border border-white/10">
+      <h2 class="text-3xl glow mb-6">Profit Chart</h2>
+      <canvas id="chart"></canvas>
+    </div>
+  </div>
+
+  <div class="mt-12 text-center space-x-8">
+    <button onclick="topup()" class="bg-green-600 hover:bg-green-500 px-12 py-6 rounded-2xl text-2xl font-bold">TOP-UP CAPITAL</button>
+    <button onclick="withdraw()" class="bg-red-600 hover:bg-red-500 px-12 py-6 rounded-2xl text-2xl font-bold">WITHDRAW ALL PROFIT</button>
+  </div>
+</div>
+
+<script>
+let balance = 20;
+let history = [];
+let chart;
+
+function addTrade(profit) {
+  balance = Math.round(balance * (1 + profit/100) * 100) / 100;
+  const time = new Date().toLocaleTimeString();
+  const log = document.getElementById('log');
+  const color = profit > 0 ? 'text-green-400' : 'text-red-400';
+  log.innerHTML = `<div class="${color}">[${time}] ${profit > 0 ? '+' : ''}${profit}% → $${balance.toFixed(2)}</div>` + log.innerHTML;
+  
+  document.getElementById('balance').textContent = '$' + balance.toFixed(balance, 2);
+  document.getElementById('profit').textContent = '+' + (((balance-20)/20)*100).toFixed(0) + '%';
+  document.getElementById('trades').textContent = history.length + 1;
+  document.getElementById('size').textContent = '$' + Math.min(5 + Math.floor((balance-20)/10)*1, 100);
+  
+  history.push({time, balance});
+  updateChart();
+}
+
+function updateChart() {
+  if (!chart) {
+    chart = new Chart(document.getElementById('chart'), {
+      type: 'line',
+      data: { labels: [], datasets: [{ label: 'Balance $', data: [], borderColor: '#00ff88', tension: 0.3, fill: true }] },
+      options: { responsive: true, scales: { y: { beginAtZero: false } } }
+    });
+  }
+  chart.data.labels = history.map(h => h.time);
+  chart.data.datasets[0].data = history.map(h => h.balance);
+  chart.update();
+}
+
+function topup() {
+  const amt = prompt("How much USDT to add?", "50");
+  if (amt) {
+    balance += parseFloat(amt);
+    addTrade(0); // just update display
+    alert(`Added $${amt} — new balance: $${balance.toFixed(2)}`);
+  }
+}
+
+function withdraw() {
+  const profit = balance - 20;
+  if (profit <= 0) return alert("No profit yet!");
+  if (confirm(`Withdraw $${profit.toFixed(2)} profit?\n(Leaves $20 base capital)`)) {
+    balance = 20;
+    addTrade(0);
+    alert(`Withdrawn $${profit.toFixed(2)} to your wallet!`);
+  }
+}
+
+// Auto-refresh from your executor
+setInterval(async () => {
+  try {
+    const r = await fetch('http://localhost:3000/api/status');
+    const d = await r.json();
+    if (d.balance !== balance) addTrade(((d.balance - balance)/balance)*100);
+  } catch(e) {}
+}, 8000);
+
+// Demo mode — remove when executor is connected
+setInterval(() => addTrade(Math.random() > 0.3 ? 47 : -12), 15000);
+</script>
+</body>
+</html>
