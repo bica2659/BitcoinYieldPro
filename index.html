@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Solana $5 → $5000 Bot</title>
+  <meta http-equiv="refresh" content="5">
+  <style>
+    body { font-family: Arial; background: #000; color: lime; text-align: center; padding: 50px; }
+    .big { font-size: 4em; }
+    .trade { margin: 20px; padding: 15px; background: #111; border-radius: 10px; }
+  </style>
+</head>
+<body>
+  <h1>SOLANA MONEY PRINTER</h1>
+  <div class="big">Balance: $<span id="bal">5.00</span></div>
+  <div>Trades Today: <span id="trades">0</span></div>
+  <h2>Live Trade Log</h2>
+  <div id="log"></div>
+
+  <script>
+    setInterval(async () => {
+      const r = await fetch("/api/status");
+      const d = await r.json();
+      document.getElementById("bal").innerText = d.balance.toFixed(2);
+      document.getElementById("trades").innerText = d.trades;
+      document.getElementById("log").innerHTML = d.history.map(t => 
+        `<div class="trade">[${t.time}] ${t.action} $${t.token} — $${t.size}</div>`
+      ).reverse().join("");
+    }, 4000);
+  </script>
+</body>
+</html>
