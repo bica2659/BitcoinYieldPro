@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SOLANA SNIPER EMPIRE — LIVE CONTROL</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  body { background: linear-gradient(135deg, #000428, #004e92); color: #00ff88; font-family: 'Courier New', monospace; }
+  .glow { text-shadow: 0 0 20px #00ff88; }
+  .profit { color: #00ff88; }
+  .loss { color: #ff0066; }
+  .slider { height: 10px; border-radius: 5px; background: #333; }
+  .slider::-webkit-slider-thumb { -webkit-appearance: none; width: 30px; height: 30px; border-radius: 50%; background: #00ff88; cursor: pointer; }
+</style>
+</head>
+<body class="min-h-screen p-8">
+
+<div class="max-w-7xl mx-auto text-center">
+  <h1 class="text-7xl font-bold glow mb-4">SOLANA SNIPER EMPIRE</h1>
+  <p class="text-2xl mb-8">Wallet: <span id="wallet">Loading...</span></p>
+
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-6 mb-12">
+    <div class="bg-black/70 border-2 border-green-500/50 rounded-3xl p-8">
+      <div class="text-5xl profit font-bold" id="balance">$20.11</div>
+      <div class="text-lg">Balance</div>
+    </div>
+    <div class="bg-black/70 border-2 border-yellow-500/50 rounded-3xl p-8">
+      <div class="text-5xl font-bold" id="trades">0</div>
+      <div class="text-lg">Trades</div>
+    </div>
+    <div class="bg-black/70 border-2 border-cyan-500/50 rounded-3xl p-8">
+      <div>
+      <div class="text-5xl profit font-bold" id="profit">+0%</div>
+      <div class="text-lg">Total Profit</div>
+    </div>
+    <div class="bg-black/70 border-2 border-purple-500/50 rounded-3xl p-8">
+      <div class="text-5xl font-bold" id="threshold">50</div>
+      <div class="text-lg">Threshold</div>
+    </div>
+    <div class="bg-black/70 border-2 border-pink-500/50 rounded-3xl p-8">
+      <div class="text-5xl font-bold" id="size">$5</div>
+      <div class="text-lg">Trade Size</div>
+    </div>
+  </div>
+
+  <!-- Threshold Control -->
+  <div class="bg-black/60 rounded-3xl p-10 mb-8 mb-12 border border-white/10">
+    <h2 class="text-4xl glow mb-6">SIGNAL THRESHOLD CONTROL</h2>
+    <div class="flex items-center gap-8 max-w-4xl mx-auto">
+      <span class="text-xl">Aggressive</span>
+      <input type="range" min="30" max="100" value="50" class="slider flex-1" id="slider">
+      <span class="text-xl">Conservative</span>
+      <div class="text-5xl font-bold w-24" id="value">50</div>
+    </div>
+    <button onclick="update()" class="mt-6 bg-gradient-to-r from-green-600 to-cyan-500 hover:from-green-500 hover:to-cyan-400 px-16 py-6 rounded-2xl text-3xl font-bold">
+      UPDATE THRESHOLD
+    </button>
+  </div>
+
+  <!-- Withdraw Profit -->
+  <div class="bg-black/60 rounded-3xl p-10 mb-12 border border-red-500/30">
+    <h2 class="text-4xl glow mb-6">WITHDRAW PROFIT TO ANY ADDRESS</h2>
+    <div class="flex flex-col md:flex-row gap-6 max-w-4xl mx-auto">
+      <input type="text" id="addr" placeholder="Enter Solana address" class="flex-1 p-5 bg-black/50 border border-white/20 rounded-xl text-white text-xl rounded-xl">
+      <input type="number" id="percent" value="50" min="1" max="100" class="w-32 p-5 bg-black/50 border border-white/20 rounded-xl text-white text-center text-xl">
+      <button onclick="withdraw()" class="bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 px-16 py-5 rounded-2xl text-3xl font-bold">
+        WITHDRAW
+      </button>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
+    <div class="bg-black/70 rounded-3xl p-10 border border-white/10">
+      <h2 class="text-4xl glow mb-8">LIVE TRADE LOG</h2>
+      <div id="log" class="text-left space-y-4 text-xl max-h-96 overflow-y-auto"></div>
+    </div>
+    <div class="bg-black/70 rounded-3xl p-10 border border-white/10">
+      <h2 class="text-4xl glow mb-8">BALANCE GROWTH</h2>
+      <canvas id="chart"></canvas>
+    </div>
+  </div>
+</div>
+
+<script>
+let balance = 20.11;
+let history = [{time: new Date().toLocaleTimeString(), balance}];
+let chart;
+
+const slider = document.getElementById('slider');
+const value = document.getElementById('value');
+slider.addEventListener('input', () => value.textContent = slider.value);
+
+async function update() {
+  const res = await fetch('/api/update-threshold', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({threshold: parseInt(slider.value)})
+  });
+  if (res.ok) alert("Threshold updated to " + slider.value);
+}
+
+async function withdraw() {
+  const addr = document.getElementById('addr').value.trim();
+  const pct = document.getElementById('percent').value;
+  if (!addr || !pct) return alert("Fill address + %");
+  const res = await fetch('/api/withdraw', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({address: addr, percent: parseInt(pct)})
+  });
+  const data = await res.json();
+  if (data.success) {
+    alert(`Withdrawn $${data.withdrawn} profit!\nNew balance: $${data.newBalance}`);
+  }
+}
+
+// Auto-refresh
+setInterval(async () => {
+  try {
+    const r = await fetch('/api/status');
+    const d = await r.json();
+    document.getElementById('balance').textContent = '$' + d.balance;
+    document.getElementById('wallet').textContent = d.wallet || 'Unknown';
+    document.getElementById('threshold').textContent = d.threshold || 50;
+  } catch(e) {}
+}, 5000);
+
+new Chart(document.getElementById('chart'), {
+  type: 'line',
+  data: { labels: history.map(h=>h.time), datasets: [{ data: history.map(h=>h.balance), borderColor: '#00ff88', tension: 0.4, fill: true }] },
+  options: { responsive: true, scales: { y: { beginAtZero: false } } }
+});
+</script>
+</body>
+</html>
