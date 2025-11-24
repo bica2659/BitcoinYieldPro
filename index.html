@@ -8,106 +8,388 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
   body { background: #000814; color: #00ff88; font-family: 'Courier New', monospace; }
-  .glow { text-shadow: 0 0 30px #00ff88; }
+  .glow { text-shadow: 0 0 30px #00ff88; animation: glow 2s ease-in-out infinite alternate; }
+  @keyframes glow { from { text-shadow: 0 0 20px #00ff88; } to { text-shadow: 0 0 40px #00ff88, 0 0 60px #00ff88; } }
   .profit { color: #00ff88; }
   .loss { color: #ff0066; }
   .card { background: rgba(20, 20, 40, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(0, 255, 136, 0.2); }
+  .pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 12px;
+    background: linear-gradient(to right, #ff0066 0%, #ffaa00 50%, #00ff88 100%);
+    border-radius: 10px;
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 30px;
+    height: 30px;
+    background: #00ff88;
+    cursor: pointer;
+    border-radius: 50%;
+    border: 3px solid #000814;
+    box-shadow: 0 0 20px #00ff88;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 30px;
+    height: 30px;
+    background: #00ff88;
+    cursor: pointer;
+    border-radius: 50%;
+    border: 3px solid #000814;
+    box-shadow: 0 0 20px #00ff88;
+  }
 </style>
 </head>
 <body class="min-h-screen p-4 md:p-8">
 
 <div class="max-w-7xl mx-auto">
   <h1 class="text-5xl md:text-7xl font-bold text-center glow mb-4">SOLANA SNIPER EMPIRE</h1>
-  <p class="text-center text-xl mb-8">Wallet: <span id="wallet" class="font-mono">Connecting...</span></p>
+  <p class="text-center text-xl mb-2 opacity-80">Auto-Compound Trading Bot</p>
+  <p class="text-center mb-8">Wallet: <span id="wallet" class="font-mono text-cyan-400">Connecting...</span></p>
 
-  <!-- Stats -->
+  <!-- Stats Grid -->
   <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-10">
-    <div class="card rounded-2xl p-6 text-center"><div class="text-4xl profit font-bold" id="balance">$20.11</div><div>Balance</div></div>
-    <div class="card rounded-2xl p-6 text-center"><div class="text-4xl font-bold" id="trades">0</div><div>Trades</div></div>
-    <div class="card rounded-2xl p-6 text-center"><div class="text-4xl profit font-bold" id="profit">+0%</div><div>Profit</div></div>
-    <div class="card rounded-2xl p-6 text-center"><div class="text-4xl font-bold" id="threshold">50</div><div>Threshold</div></div>
-    <div class="card rounded-2xl p-6 text-center"><div class="text-4xl font-bold" id="size">$5</div><div>Trade Size</div></div>
+    <div class="card rounded-2xl p-6 text-center hover:border-green-500/50 transition-all">
+      <div class="text-4xl profit font-bold" id="balance">$20.11</div>
+      <div class="text-gray-400 text-sm">Balance</div>
+    </div>
+    <div class="card rounded-2xl p-6 text-center hover:border-yellow-500/50 transition-all">
+      <div class="text-4xl font-bold text-yellow-400" id="trades">0</div>
+      <div class="text-gray-400 text-sm">Trades</div>
+    </div>
+    <div class="card rounded-2xl p-6 text-center hover:border-cyan-500/50 transition-all">
+      <div class="text-4xl profit font-bold" id="profit">+0%</div>
+      <div class="text-gray-400 text-sm">Total Profit</div>
+    </div>
+    <div class="card rounded-2xl p-6 text-center hover:border-purple-500/50 transition-all">
+      <div class="text-4xl font-bold text-purple-400" id="threshold">45</div>
+      <div class="text-gray-400 text-sm">Threshold</div>
+    </div>
+    <div class="card rounded-2xl p-6 text-center hover:border-pink-500/50 transition-all">
+      <div class="text-4xl font-bold text-pink-400" id="winrate">0%</div>
+      <div class="text-gray-400 text-sm">Win Rate</div>
+    </div>
   </div>
 
-  <!-- Threshold + Withdraw -->
+  <!-- Threshold Control + Withdraw -->
   <div class="grid md:grid-cols-2 gap-8 mb-10">
-    <div class="card rounded-3xl p-8">
-      <h2 class="text-3xl glow mb-6 text-center">THRESHOLD CONTROL</h2>
-      <div class="flex items-center gap-6">
-        <span>Aggressive</span>
-        <input type="range" min="30" max="100" value="50" class="flex-1 h-3" id="slider">
-        <span>Conservative</span>
-        <span class="text-4xl font-bold w-20 text-center" id="value">50</span>
+    <!-- Threshold Control -->
+    <div class="card rounded-3xl p-8 hover:border-green-500/40 transition-all">
+      <h2 class="text-3xl glow mb-6 text-center">⚙️ THRESHOLD CONTROL</h2>
+      <p class="text-center text-gray-400 mb-6 text-sm">Lower = More signals | Higher = More selective</p>
+      
+      <div class="flex items-center gap-6 mb-6">
+        <span class="text-xs text-gray-400">Aggressive</span>
+        <input type="range" min="30" max="100" value="45" class="flex-1 h-3" id="slider">
+        <span class="text-xs text-gray-400">Conservative</span>
       </div>
-      <button onclick="updateThreshold()" class="mt-6 w-full bg-gradient-to-r from-green-600 to-cyan-500 hover:from-green-500 hover:to-cyan-400 py-4 rounded-2xl text-2xl font-bold">UPDATE</button>
+      
+      <div class="text-center mb-6">
+        <span class="text-6xl font-bold" id="value">45</span>
+      </div>
+      
+      <button onclick="updateThreshold()" class="w-full bg-gradient-to-r from-green-600 to-cyan-500 hover:from-green-500 hover:to-cyan-400 py-4 rounded-2xl text-2xl font-bold transition-all transform hover:scale-105">
+        UPDATE THRESHOLD
+      </button>
+      
+      <div id="thresholdMsg" class="mt-4 p-3 rounded-xl text-center hidden"></div>
+      
+      <div class="mt-6 bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 text-xs text-gray-300">
+        <strong class="text-blue-400">💡 Guide:</strong><br>
+        30-40: Very Aggressive | 45-55: Balanced | 60-70: Conservative
+      </div>
     </div>
 
-    <div class="card rounded-3xl p-8">
-      <h2 class="text-3xl glow mb-6 text-center">WITHDRAW PROFIT</h2>
+    <!-- Withdraw Section -->
+    <div class="card rounded-3xl p-8 hover:border-red-500/40 transition-all">
+      <h2 class="text-3xl glow mb-6 text-center">💰 WITHDRAW PROFIT</h2>
+      
       <div class="space-y-4">
-        <input type="text" id="addr" placeholder="Enter any Solana address" class="w-full p-4 bg-black/50 border border-white/20 rounded-xl">
-        <input type="number" id="percent" value="50" min="1" max="100" class="w-full p-4 bg-black/50 border border-white/20 rounded-xl text-center">
-        <button onclick="withdraw()" class="w-full bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 py-4 rounded-2xl text-2xl font-bold">WITHDRAW NOW</button>
+        <div>
+          <label class="text-sm text-gray-400 mb-2 block">Solana Address:</label>
+          <input type="text" id="addr" placeholder="Enter any Solana address" 
+            class="w-full p-4 bg-black/50 border border-white/20 rounded-xl focus:border-green-500/50 outline-none transition-all">
+        </div>
+        
+        <div>
+          <label class="text-sm text-gray-400 mb-2 block">Percentage to Withdraw:</label>
+          <input type="number" id="percent" value="50" min="1" max="100" 
+            class="w-full p-4 bg-black/50 border border-white/20 rounded-xl text-center text-2xl font-bold focus:border-green-500/50 outline-none transition-all">
+        </div>
+        
+        <button onclick="withdraw()" class="w-full bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 py-4 rounded-2xl text-2xl font-bold transition-all transform hover:scale-105">
+          WITHDRAW NOW
+        </button>
       </div>
+      
+      <div id="withdrawMsg" class="mt-4 p-3 rounded-xl text-center hidden"></div>
     </div>
   </div>
 
-  <!-- Log + Chart -->
-  <div class="grid lg:grid-cols-2 gap-8">
+  <!-- Live Log + Chart -->
+  <div class="grid lg:grid-cols-2 gap-8 mb-8">
+    <!-- Live Trade Log -->
     <div class="card rounded-3xl p-8">
-      <h2 class="text-3xl glow mb-6">LIVE TRADE LOG</h2>
-      <div id="log" class="space-y-3 max-h-96 overflow-y-auto text-lg"></div>
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-3xl glow">📊 LIVE TRADE LOG</h2>
+        <div class="pulse">
+          <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+        </div>
+      </div>
+      <div id="log" class="space-y-3 max-h-96 overflow-y-auto text-sm">
+        <div class="text-center text-gray-500 py-8">Waiting for signals...</div>
+      </div>
     </div>
+
+    <!-- Balance Chart -->
     <div class="card rounded-3xl p-8">
-      <h2 class="text-3xl glow mb-6">BALANCE GROWTH</h2>
+      <h2 class="text-3xl glow mb-6">📈 BALANCE GROWTH</h2>
       <canvas id="chart"></canvas>
+    </div>
+  </div>
+
+  <!-- Active Position -->
+  <div id="positionCard" class="card rounded-3xl p-8 hidden">
+    <h2 class="text-3xl glow mb-6">🎯 ACTIVE POSITION</h2>
+    <div class="grid md:grid-cols-4 gap-4 text-center">
+      <div>
+        <div class="text-2xl font-bold" id="posToken">-</div>
+        <div class="text-gray-400 text-sm">Token</div>
+      </div>
+      <div>
+        <div class="text-2xl font-bold" id="posEntry">-</div>
+        <div class="text-gray-400 text-sm">Entry</div>
+      </div>
+      <div>
+        <div class="text-2xl font-bold profit" id="posPnl">-</div>
+        <div class="text-gray-400 text-sm">P&L</div>
+      </div>
+      <div>
+        <div class="text-2xl font-bold" id="posTime">-</div>
+        <div class="text-gray-400 text-sm">Duration</div>
+      </div>
     </div>
   </div>
 </div>
 
 <script>
 let balance = 20.11;
+let startingBalance = 20.11;
 let history = [{time: new Date().toLocaleTimeString(), balance}];
 let chart;
+let trades = 0;
+let wins = 0;
 
-// Slider
+// Slider control
 const slider = document.getElementById('slider');
-const value.textContent = slider.value;
+const value = document.getElementById('value');
 slider.oninput = () => value.textContent = slider.value;
 
+// Update threshold via API
 async function updateThreshold() {
-  await fetch('/api/update-threshold', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({threshold:+slider.value})});
-  alert("Threshold updated to " + slider.value);
+  const msg = document.getElementById('thresholdMsg');
+  try {
+    const res = await fetch('/api/update-threshold', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({threshold: parseInt(slider.value)})
+    });
+    
+    if (res.ok) {
+      msg.className = 'mt-4 p-3 rounded-xl text-center bg-green-500/20 border border-green-500/50';
+      msg.textContent = `✓ Threshold updated to ${slider.value}!`;
+      msg.classList.remove('hidden');
+      document.getElementById('threshold').textContent = slider.value;
+      setTimeout(() => msg.classList.add('hidden'), 3000);
+    } else {
+      throw new Error('Failed');
+    }
+  } catch (e) {
+    msg.className = 'mt-4 p-3 rounded-xl text-center bg-red-500/20 border border-red-500/50';
+    msg.textContent = '✗ Failed. Is bot running?';
+    msg.classList.remove('hidden');
+    setTimeout(() => msg.classList.add('hidden'), 3000);
+  }
 }
 
+// Withdraw function
 async function withdraw() {
   const addr = document.getElementById('addr').value.trim();
   const pct = document.getElementById('percent').value;
-  if (!addr) return alert("Enter address");
-  const res = await fetch('/api/withdraw', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({address:addr,percent:+pct})});
-  const d = await res.json();
-  if (d.success) alert(`Withdrawn $${d.withdrawn} → ${addr.slice(0,6)}...${addr.slice(-4)}`);
-}
-
-// Live update
-async function load() {
+  const msg = document.getElementById('withdrawMsg');
+  
+  if (!addr) {
+    msg.className = 'mt-4 p-3 rounded-xl text-center bg-red-500/20 border border-red-500/50';
+    msg.textContent = '✗ Enter a valid address';
+    msg.classList.remove('hidden');
+    setTimeout(() => msg.classList.add('hidden'), 3000);
+    return;
+  }
+  
   try {
-    const r = await fetch('/api/status');
-    const d = await r.json();
-    document.getElementById('balance').textContent = '$' + d.balance;
-    document.getElementById('threshold').textContent = d.threshold || 50;
-    document.getElementById('wallet').textContent = d.wallet || 'Unknown';
-    // Add new trades to log, update chart, etc.
-  } catch(e) {}
+    const res = await fetch('/api/withdraw', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({address: addr, percent: parseInt(pct)})
+    });
+    
+    const data = await res.json();
+    
+    if (data.success) {
+      msg.className = 'mt-4 p-3 rounded-xl text-center bg-green-500/20 border border-green-500/50';
+      msg.textContent = `✓ Withdrawn $${data.withdrawn} → ${addr.slice(0,4)}...${addr.slice(-4)}`;
+      msg.classList.remove('hidden');
+    } else {
+      throw new Error(data.error || 'Failed');
+    }
+  } catch (e) {
+    msg.className = 'mt-4 p-3 rounded-xl text-center bg-red-500/20 border border-red-500/50';
+    msg.textContent = '✗ ' + e.message;
+    msg.classList.remove('hidden');
+  }
 }
-setInterval(load, 5000);
-load();
 
-new Chart(document.getElementById('chart'), {
-  type: 'line',
-  data: { labels: history.map(h=>h.time), datasets: [{ data: history.map(h=>h.balance), borderColor: '#00ff88', tension: 0.4, fill: true }] },
-  options: { responsive: true, scales: { y: { beginAtZero: false } } }
-});
+// Add trade to log
+function addLog(data) {
+  const log = document.getElementById('log');
+  const time = data.time || new Date().toLocaleTimeString();
+  const action = data.action || 'BUY';
+  const token = data.token || 'UNKNOWN';
+  
+  const color = action === 'BUY' ? 'text-green-400' : 'text-yellow-400';
+  const icon = action === 'BUY' ? '📈' : '💰';
+  
+  const entry = `
+    <div class="${color} bg-black/30 p-3 rounded-xl border border-white/10">
+      ${icon} [${time}] ${action} $${token} ${data.size ? `| $${data.size}` : ''} ${data.score ? `| Score: ${data.score}` : ''}
+    </div>
+  `;
+  
+  if (log.innerHTML.includes('Waiting for signals')) {
+    log.innerHTML = entry;
+  } else {
+    log.innerHTML = entry + log.innerHTML;
+  }
+  
+  while (log.children.length > 20) {
+    log.removeChild(log.lastChild);
+  }
+}
+
+// Update dashboard data
+async function loadStatus() {
+  try {
+    const res = await fetch('/api/status');
+    const data = await res.json();
+    
+    // Update stats
+    balance = parseFloat(data.balance) || balance;
+    document.getElementById('balance').textContent = '$' + balance.toFixed(2);
+    document.getElementById('wallet').textContent = data.wallet || 'Unknown';
+    
+    if (data.threshold) {
+      document.getElementById('threshold').textContent = data.threshold;
+      slider.value = data.threshold;
+      value.textContent = data.threshold;
+    }
+    
+    if (data.trades !== undefined) {
+      trades = data.trades;
+      document.getElementById('trades').textContent = trades;
+    }
+    
+    // Update profit
+    const profitPct = ((balance - startingBalance) / startingBalance * 100).toFixed(1);
+    document.getElementById('profit').textContent = (profitPct >= 0 ? '+' : '') + profitPct + '%';
+    
+    // Update win rate
+    if (trades > 0 && data.wins !== undefined) {
+      wins = data.wins;
+      const winrate = ((wins / trades) * 100).toFixed(0);
+      document.getElementById('winrate').textContent = winrate + '%';
+    }
+    
+    // Update history and chart
+    if (data.history && data.history.length > 0) {
+      data.history.forEach(trade => {
+        addLog(trade);
+      });
+      
+      history.push({time: new Date().toLocaleTimeString(), balance});
+      updateChart();
+    }
+    
+    // Show active position if exists
+    if (data.position) {
+      document.getElementById('positionCard').classList.remove('hidden');
+      document.getElementById('posToken').textContent = '$' + data.position.token;
+      document.getElementById('posEntry').textContent = '$' + data.position.entry;
+      document.getElementById('posPnl').textContent = data.position.pnl;
+      document.getElementById('posTime').textContent = data.position.duration || '-';
+    } else {
+      document.getElementById('positionCard').classList.add('hidden');
+    }
+    
+  } catch (e) {
+    console.error('Status fetch failed:', e);
+  }
+}
+
+// Initialize chart
+function updateChart() {
+  if (!chart) {
+    const ctx = document.getElementById('chart').getContext('2d');
+    chart = new Chart(ctx, {
+      type: 'line',
+      data: { 
+        labels: history.map(h => h.time), 
+        datasets: [{ 
+          label: 'Balance ($)',
+          data: history.map(h => h.balance), 
+          borderColor: '#00ff88',
+          backgroundColor: 'rgba(0, 255, 136, 0.1)',
+          tension: 0.4, 
+          fill: true,
+          borderWidth: 3
+        }] 
+      },
+      options: { 
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { 
+            labels: { color: '#00ff88' }
+          }
+        },
+        scales: { 
+          y: { 
+            beginAtZero: false,
+            ticks: { color: '#00ff88' },
+            grid: { color: 'rgba(0, 255, 136, 0.1)' }
+          },
+          x: {
+            ticks: { color: '#00ff88' },
+            grid: { color: 'rgba(0, 255, 136, 0.1)' }
+          }
+        }
+      }
+    });
+  } else {
+    chart.data.labels = history.map(h => h.time);
+    chart.data.datasets[0].data = history.map(h => h.balance);
+    chart.update();
+  }
+}
+
+// Initialize
+updateChart();
+loadStatus();
+setInterval(loadStatus, 5000);
 </script>
 </body>
 </html>
