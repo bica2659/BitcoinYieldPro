@@ -261,33 +261,33 @@ body::before{
     </div>
   </div>
 
-  <!-- TX 4 -->
+  <!-- TX 4 — DIRECT CALL (not Safe) -->
   <div class="tx-item" id="txItem3">
     <div class="tx-head" onclick="toggleTx(3)">
       <div class="tx-num">4</div>
-      <div class="tx-name">GameplayPool → authorise Hub</div>
+      <div class="tx-name">GameplayPool → authorise Hub <span style="font-size:9px;color:var(--blue);margin-left:6px">DIRECT · not Safe</span></div>
       <div class="tx-status pending" id="txStatus3">Pending</div>
     </div>
     <div class="tx-body" id="txBody3" style="display:none">
+      <div class="ibox re" style="margin-bottom:10px">
+        <strong>⚠️ GameplayPool owner = Founder wallet 0xbc307d…</strong><br>
+        This cannot go through the Safe — Safe is not the owner. Connect the <strong>Founder wallet (0xbc307d)</strong> and click Execute Direct below.
+      </div>
       <div class="tx-detail">
-        <b>Contract:</b> <code id="txTo3">0x6CcFa834083E60fF7666209fB2b8A8c3bd79E120</code><br>
+        <b>Contract:</b> <code>0x6CcFa834083E60fF7666209fB2b8A8c3bd79E120</code><br>
         <b>Function:</b> <code>setAuthorised(address,bool)</code><br>
         <b>Args:</b> <code>0xc69c7A7965Cab26fbac1991cC0faDD45a1C80F63</code>, <code>true</code><br>
+        <b>Required signer:</b> <code>0xbc307d5c26A62eED1d92aF9E8F8e39046274d2Eb</code> (Founder)<br>
         <b>Result:</b> Hub can call payReward() to give winners REALM from the 48M pool
       </div>
-      <div id="txHash3" class="hash-box" style="display:none">
-        <div>Tx hash: <span id="txHashVal3">—</span></div>
-        <div id="txHashNonce3" style="margin-top:3px;font-size:8px;color:var(--dim)"></div>
+      <div id="tx4DirectStatus" class="hash-box" style="margin-top:10px">
+        <div>Owner check: <span id="tx4OwnerCheck" style="color:var(--dim)">Connect Founder wallet first</span></div>
+        <div style="margin-top:4px">Current auth status: <span id="tx4AuthStatus" style="color:var(--dim)">—</span></div>
       </div>
-      <div class="approval-track">
-        <div class="approval-slot" id="approvalSlot3_0"><div class="as-label">Approval 1</div><div class="as-addr wait" id="approvalAddr3_0">Waiting…</div></div>
-        <div class="approval-slot" id="approvalSlot3_1"><div class="as-label">Approval 2</div><div class="as-addr wait" id="approvalAddr3_1">Waiting…</div></div>
+      <div class="action-row single" style="margin-top:10px">
+        <button class="btn btn-green" id="execBtn3" onclick="execDirectTx4()" disabled>🚀 Execute Direct (Founder wallet)</button>
       </div>
-      <div class="action-row" id="txActions3">
-        <button class="btn btn-gold" id="approveBtn3" onclick="approveHash(3)" disabled>Approve Hash</button>
-        <button class="btn btn-green" id="execBtn3" onclick="execTx(3)" disabled>Execute</button>
-      </div>
-      <button class="btn btn-ghost" style="margin-top:8px;font-size:9px" onclick="refreshTxStatus(3)">🔄 Refresh Status</button>
+      <button class="btn btn-ghost" style="margin-top:8px;font-size:9px" onclick="checkTx4Status()">🔄 Check Auth Status</button>
     </div>
   </div>
 
@@ -454,10 +454,12 @@ async function connectWallet() {
     if(!isOwner) log('⚠️ Your wallet is NOT a Safe owner. You can watch but cannot approve.', 'er');
 
     // Enable approve buttons for owners, refresh all tx statuses
-    for(let i=0;i<4;i++) {
+    for(let i=0;i<3;i++) {  // Only TX 1-3 are Safe txs
       if(isOwner) document.getElementById(`approveBtn${i}`).disabled = false;
       await computeTxHash(i);
     }
+    // TX4 is a direct call — check separately
+    await checkTx4Status();
 
   } catch(e) {
     log('Connection error: '+e.message, 'er');
@@ -670,6 +672,80 @@ async function execTx(idx) {
 }
 
 // ═══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// TX4 DIRECT CALL (GameplayPool — owned by Founder 0xbc307d)
+// ═══════════════════════════════════════════════════════════
+const GAMEPLAY_POOL_ADDR  = '0x6CcFa834083E60fF7666209fB2b8A8c3bd79E120';
+const HUB_ADDR            = '0xc69c7A7965Cab26fbac1991cC0faDD45a1C80F63';
+const FOUNDER_ADDR        = '0xbc307d5c26A62eED1d92aF9E8F8e39046274d2Eb';
+const GP_ABI = [
+  'function setAuthorised(address,bool) external',
+  'function authorised(address) view returns (bool)',
+  'function owner() view returns (address)',
+];
+
+async function checkTx4Status() {
+  if(!provider) return;
+  try {
+    const gp = new ethers.Contract(GAMEPLAY_POOL_ADDR, GP_ABI, provider);
+    const [owner, isAuth] = await Promise.all([
+      gp.owner(),
+      gp.authorised(HUB_ADDR),
+    ]);
+    const ownerEl  = document.getElementById('tx4OwnerCheck');
+    const authEl   = document.getElementById('tx4AuthStatus');
+    const execBtn  = document.getElementById('execBtn3');
+    const statusEl = document.getElementById('txStatus3');
+
+    ownerEl.textContent = `Owner: ${shortAddr(owner)} ${owner.toLowerCase()===FOUNDER_ADDR.toLowerCase() ? '✅' : '⚠️ unexpected'}`;
+    ownerEl.style.color = owner.toLowerCase()===FOUNDER_ADDR.toLowerCase() ? 'var(--green)' : 'var(--red)';
+
+    if(isAuth) {
+      authEl.textContent = '✅ Hub already authorised — TX4 complete!';
+      authEl.style.color = 'var(--green)';
+      statusEl.textContent = '✅ Done';
+      statusEl.className = 'tx-status done';
+      execBtn.disabled = true;
+      log('TX4: Hub is already authorised on GameplayPool ✅', 'ok');
+    } else {
+      authEl.textContent = '❌ Hub NOT authorised yet';
+      authEl.style.color = 'var(--red)';
+      // Enable exec only if connected wallet is the owner
+      if(userAddr && userAddr.toLowerCase() === owner.toLowerCase()) {
+        execBtn.disabled = false;
+        log('TX4: You are the GameplayPool owner — Execute Direct is ready', 'ok');
+      } else {
+        execBtn.disabled = true;
+        log(`TX4: Connect Founder wallet (${shortAddr(FOUNDER_ADDR)}) to execute`, 'in');
+      }
+    }
+  } catch(e) {
+    log('TX4 status check error: '+e.message, 'er');
+  }
+}
+
+async function execDirectTx4() {
+  if(!signer) return log('Connect wallet first','er');
+  try {
+    const gp = new ethers.Contract(GAMEPLAY_POOL_ADDR, GP_ABI, signer);
+    const owner = await gp.owner();
+    if(owner.toLowerCase() !== userAddr.toLowerCase()) {
+      return log(`❌ Wrong wallet. Need Founder: ${shortAddr(FOUNDER_ADDR)}, connected: ${shortAddr(userAddr)}`, 'er');
+    }
+    log('Sending setAuthorised(Hub, true) directly from Founder wallet…', 'in');
+    const tx = await gp.setAuthorised(HUB_ADDR, true, {gasLimit:100000, type:0});
+    log(`Tx sent: ${tx.hash.slice(0,18)}…`, 'in');
+    await tx.wait();
+    log('✅ TX4 done — Hub is now authorised on GameplayPool!', 'ok');
+    document.getElementById('txStatus3').textContent = '✅ Done';
+    document.getElementById('txStatus3').className = 'tx-status done';
+    document.getElementById('execBtn3').disabled = true;
+    await checkTx4Status();
+  } catch(e) {
+    log('TX4 direct exec error: '+(e.reason||e.message), 'er');
+  }
+}
+
 // UI HELPERS
 // ═══════════════════════════════════════════════════════════
 function toggleTx(idx) {
