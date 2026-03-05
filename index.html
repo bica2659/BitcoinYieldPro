@@ -473,10 +473,15 @@ async function computeTxHash(idx) {
     const tx = TRANSACTIONS[idx];
     const data = encodeCalldata(tx.fn, tx.args);
 
-    // Each tx uses the nonce RELATIVE to when it will be executed.
-    // We compute with nonce+idx (assuming sequential execution).
-    const baseNonce = (await safeC.nonce()).toNumber();
-    const txNonce = baseNonce + idx;
+    // Nonce = currentNonce + how many PENDING txs come before this one.
+    // (Completed txs already advanced the nonce — don't count them again.)
+    const currentNonce = (await safeC.nonce()).toNumber();
+    // Count how many txs with index < idx are still pending (not yet executed)
+    let pendingBefore = 0;
+    for(let j = 0; j < idx; j++) {
+      if(txState[j] && txState[j].nonce >= currentNonce) pendingBefore++;
+    }
+    const txNonce = currentNonce + pendingBefore;
 
     // Use Safe's own getTransactionHash — guaranteed to match what the contract checks
     const hash = await safeC.getTransactionHash(
@@ -553,12 +558,13 @@ async function refreshTxStatus(idx) {
 
   // Check if already done (nonce moved past this one)
   const currentNonce = (await safeC.nonce()).toNumber();
-  if(currentNonce > txState[idx].nonce) {
+  if(txState[idx] && currentNonce > txState[idx].nonce) {
     statusEl.textContent = '✅ Done';
     statusEl.className = 'tx-status done';
     document.getElementById(`approveBtn${idx}`).disabled = true;
     execBtn.disabled = true;
     log(`TX${idx+1} already executed (nonce ${txState[idx].nonce} < current ${currentNonce})`, 'ok');
+    return; // don't overwrite done status with approval count
   }
 }
 
