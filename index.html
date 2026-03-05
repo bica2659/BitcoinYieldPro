@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Core Safe Executor — CrossRealm Wiring</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+<style>
+:root{
+  --bg:#080c14;--bg2:#0d1320;--bg3:#111827;--bg4:#161d2e;
+  --border:#1e2038;--border2:#2a2d4a;
+  --gold:#f0a500;--gold2:#e09000;
+  --green:#00e87a;--green2:#00cc6a;
+  --red:#ff3355;--blue:#3d7fff;
+  --dim:#6b7280;--text:#e8e9f0;
+  --purple:#a855f7;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px}
+body{overflow-y:auto;padding:20px}
+
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(ellipse 60% 40% at 80% 10%,rgba(61,127,255,.06) 0%,transparent 60%),
+    radial-gradient(ellipse 40% 30% at 20% 80%,rgba(168,85,247,.05) 0%,transparent 60%),
+    repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.04) 2px,rgba(0,0,0,.04) 4px);
+}
+
+.wrap{max-width:780px;margin:0 auto;position:relative;z-index:1}
+
+/* ── HEADER ── */
+.hdr{text-align:center;margin-bottom:32px;padding:28px 0 20px}
+.hdr-badge{display:inline-block;background:rgba(240,165,0,.1);border:1px solid rgba(240,165,0,.3);color:var(--gold);font-size:9px;letter-spacing:3px;padding:4px 12px;border-radius:20px;margin-bottom:12px;text-transform:uppercase}
+.hdr-title{font-family:'Rajdhani',sans-serif;font-size:32px;font-weight:700;color:var(--text);margin-bottom:6px}
+.hdr-title span{color:var(--gold)}
+.hdr-sub{color:var(--dim);font-size:10px;line-height:1.8}
+
+/* ── STATUS STRIP ── */
+.status-strip{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:20px}
+.ss{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:12px 14px;text-align:center}
+.ss-lbl{font-size:8px;letter-spacing:2px;color:var(--dim);text-transform:uppercase;margin-bottom:4px}
+.ss-val{font-size:11px;font-weight:700;color:var(--gold);word-break:break-all}
+.ss-val.green{color:var(--green)}
+.ss-val.red{color:var(--red)}
+.ss-val.dim{color:var(--dim)}
+
+/* ── CARDS ── */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:14px}
+.card-title{font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:700;color:var(--gold);margin-bottom:4px;letter-spacing:1px}
+.card-sub{font-size:9px;color:var(--dim);margin-bottom:14px;line-height:1.6}
+
+/* ── HOW IT WORKS ── */
+.steps{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.step{padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:5px}
+.step-n{font-size:8px;color:var(--gold);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px}
+.step-t{font-size:10px;line-height:1.5}
+
+/* ── WALLET ── */
+#connectBtn{width:100%;padding:12px;background:linear-gradient(135deg,var(--gold),var(--gold2));border:none;color:#000;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:1.5px;border-radius:5px;text-transform:uppercase;transition:all .2s;margin-bottom:14px}
+#connectBtn:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(240,165,0,.3)}
+.wallet-row{display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(0,232,122,.06);border:1px solid rgba(0,232,122,.2);border-radius:5px;margin-bottom:14px;display:none}
+.wallet-dot{width:8px;height:8px;border-radius:50%;background:var(--green);flex-shrink:0;animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.wallet-addr{font-size:10px;color:var(--green);font-weight:700}
+.wallet-role{margin-left:auto;font-size:9px;color:var(--dim)}
+.owner-tag{background:rgba(240,165,0,.1);border:1px solid rgba(240,165,0,.3);color:var(--gold);font-size:8px;padding:2px 7px;border-radius:10px;font-weight:700;letter-spacing:.5px}
+.not-owner-tag{background:rgba(255,51,85,.1);border:1px solid rgba(255,51,85,.3);color:var(--red);font-size:8px;padding:2px 7px;border-radius:10px}
+
+/* ── TRANSACTION LIST ── */
+.tx-item{background:var(--bg3);border:1px solid var(--border);border-radius:6px;margin-bottom:8px;overflow:hidden}
+.tx-head{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none}
+.tx-num{width:22px;height:22px;border-radius:50%;background:rgba(240,165,0,.1);border:1px solid rgba(240,165,0,.3);color:var(--gold);font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.tx-name{font-size:11px;font-weight:700;flex:1}
+.tx-status{font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;flex-shrink:0}
+.tx-status.pending{background:rgba(240,165,0,.1);border:1px solid rgba(240,165,0,.3);color:var(--gold)}
+.tx-status.ready{background:rgba(61,127,255,.1);border:1px solid rgba(61,127,255,.3);color:var(--blue)}
+.tx-status.done{background:rgba(0,232,122,.1);border:1px solid rgba(0,232,122,.3);color:var(--green)}
+.tx-body{padding:0 14px 14px;border-top:1px solid var(--border)}
+.tx-detail{font-size:9px;color:var(--dim);margin-top:10px;line-height:1.9}
+.tx-detail code{color:var(--green);background:rgba(0,232,122,.06);padding:1px 5px;border-radius:3px}
+.tx-detail b{color:var(--text)}
+
+/* ── APPROVE/EXEC BUTTONS ── */
+.action-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.action-row.single{grid-template-columns:1fr}
+.btn{padding:10px 14px;border:none;font-family:inherit;font-size:10px;font-weight:700;letter-spacing:1px;border-radius:4px;cursor:pointer;text-transform:uppercase;transition:all .2s;width:100%}
+.btn:disabled{opacity:.35;cursor:not-allowed;transform:none!important;box-shadow:none!important}
+.btn-gold{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#000}
+.btn-gold:not(:disabled):hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(240,165,0,.25)}
+.btn-green{background:linear-gradient(135deg,var(--green),var(--green2));color:#000}
+.btn-green:not(:disabled):hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(0,232,122,.25)}
+.btn-ghost{background:none;border:1px solid var(--border2);color:var(--text)}
+.btn-ghost:not(:disabled):hover{border-color:var(--gold);color:var(--gold)}
+
+/* ── HASH DISPLAY ── */
+.hash-box{background:var(--bg);border:1px solid var(--border2);border-radius:4px;padding:8px 10px;margin-top:8px;font-size:9px;color:var(--dim);word-break:break-all;line-height:1.6}
+.hash-box span{color:var(--blue)}
+.hash-box.approved span{color:var(--green)}
+
+/* ── APPROVAL TRACKER ── */
+.approval-track{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+.approval-slot{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:8px 10px;font-size:9px}
+.approval-slot.approved{border-color:rgba(0,232,122,.3);background:rgba(0,232,122,.04)}
+.as-label{color:var(--dim);margin-bottom:3px;font-size:8px;letter-spacing:1px;text-transform:uppercase}
+.as-addr{font-weight:700;font-size:9px;word-break:break-all}
+.as-addr.ok{color:var(--green)}
+.as-addr.wait{color:var(--dim)}
+
+/* ── LOG ── */
+.log{background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:10px;margin-top:14px;max-height:160px;overflow-y:auto;font-size:9px;line-height:1.9}
+.log-entry{padding:2px 0;border-bottom:1px solid rgba(255,255,255,.03)}
+.log-entry:last-child{border-bottom:none}
+.log-entry.ok{color:var(--green)}
+.log-entry.er{color:var(--red)}
+.log-entry.in{color:var(--gold)}
+.log-entry.dim{color:var(--dim)}
+
+/* ── IBOX ── */
+.ibox{padding:10px 12px;background:rgba(240,165,0,.05);border:1px solid rgba(240,165,0,.2);border-radius:5px;margin:8px 0;font-size:10px;line-height:1.7;color:var(--dim)}
+.ibox strong{color:var(--gold)}
+.ibox.bl{background:rgba(61,127,255,.05);border-color:rgba(61,127,255,.2)}
+.ibox.bl strong{color:var(--blue)}
+.ibox.gr{background:rgba(0,232,122,.05);border-color:rgba(0,232,122,.2)}
+.ibox.gr strong{color:var(--green)}
+.ibox.re{background:rgba(255,51,85,.05);border-color:rgba(255,51,85,.2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="hdr">
+  <div class="hdr-badge">Core Chain · Multisig Executor</div>
+  <div class="hdr-title">Core <span>Safe</span> Executor</div>
+  <div class="hdr-sub">
+    safe.global doesn't support Core chain · this tool talks to your Safe contract directly<br>
+    Safe: <code style="color:var(--gold)">0xf88104BDaD09209600298B922193DB4351D104f8</code>
+  </div>
+</div>
+
+<!-- STATUS STRIP -->
+<div class="status-strip">
+  <div class="ss"><div class="ss-lbl">Safe Nonce</div><div class="ss-val dim" id="safeNonce">—</div></div>
+  <div class="ss"><div class="ss-lbl">Threshold</div><div class="ss-val dim" id="safeThreshold">—</div></div>
+  <div class="ss"><div class="ss-lbl">Connected As</div><div class="ss-val dim" id="connectedAs">Not connected</div></div>
+</div>
+
+<!-- CONNECT -->
+<div class="card">
+  <div class="card-title">🦊 Connect Wallet</div>
+  <div class="card-sub">Connect with a Safe owner wallet. You need 2 of the 3 owners to sign each transaction.</div>
+  <button id="connectBtn" onclick="connectWallet()">Connect MetaMask</button>
+  <div class="wallet-row" id="walletRow">
+    <div class="wallet-dot"></div>
+    <div class="wallet-addr" id="walletAddr">—</div>
+    <div class="wallet-role" id="walletRole"></div>
+  </div>
+  <div class="ibox bl">
+    <strong>How approveHash works (no safe.global needed):</strong><br>
+    1️⃣ Signer 1 connects → clicks <strong>Approve Hash</strong> on a transaction → 1 on-chain call<br>
+    2️⃣ Signer 2 connects → clicks <strong>Approve Hash</strong> on the same transaction<br>
+    3️⃣ Anyone clicks <strong>Execute</strong> → calls <code>execTransaction</code> with "approved" signatures<br>
+    Each transaction uses a fresh nonce — do them in order, one at a time.
+  </div>
+</div>
+
+<!-- TRANSACTIONS -->
+<div class="card">
+  <div class="card-title">📋 Wiring Transactions</div>
+  <div class="card-sub">4 transactions to wire CrossRealm contracts. Each requires 2/3 Safe signatures. Execute in order — nonce must match.</div>
+
+  <!-- TX 1 -->
+  <div class="tx-item" id="txItem0">
+    <div class="tx-head" onclick="toggleTx(0)">
+      <div class="tx-num">1</div>
+      <div class="tx-name">Hub → setRewardsContract</div>
+      <div class="tx-status pending" id="txStatus0">Pending</div>
+    </div>
+    <div class="tx-body" id="txBody0" style="display:none">
+      <div class="tx-detail">
+        <b>Contract:</b> <code id="txTo0">0xc69c7A7965Cab26fbac1991cC0faDD45a1C80F63</code><br>
+        <b>Function:</b> <code>setRewardsContract(address)</code><br>
+        <b>Arg:</b> <code>0x0C5Da3622e42efE0C579ef758BC8f3144018Dfc1</code> (Rewards_REALM)<br>
+        <b>Result:</b> Hub will send 14% of fees to Rewards contract on every game end
+      </div>
+      <div id="txHash0" class="hash-box" style="display:none">
+        <div>Tx hash: <span id="txHashVal0">—</span></div>
+        <div id="txHashNonce0" style="margin-top:3px;font-size:8px;color:var(--dim)"></div>
+      </div>
+      <div class="approval-track">
+        <div class="approval-slot" id="approvalSlot0_0"><div class="as-label">Approval 1</div><div class="as-addr wait" id="approvalAddr0_0">Waiting…</div></div>
+        <div class="approval-slot" id="approvalSlot0_1"><div class="as-label">Approval 2</div><div class="as-addr wait" id="approvalAddr0_1">Waiting…</div></div>
+      </div>
+      <div class="action-row" id="txActions0">
+        <button class="btn btn-gold" id="approveBtn0" onclick="approveHash(0)" disabled>Approve Hash</button>
+        <button class="btn btn-green" id="execBtn0" onclick="execTx(0)" disabled>Execute</button>
+      </div>
+      <button class="btn btn-ghost" style="margin-top:8px;font-size:9px" onclick="refreshTxStatus(0)">🔄 Refresh Status</button>
+    </div>
+  </div>
+
+  <!-- TX 2 -->
+  <div class="tx-item" id="txItem1">
+    <div class="tx-head" onclick="toggleTx(1)">
+      <div class="tx-num">2</div>
+      <div class="tx-name">Rewards → setGameHub</div>
+      <div class="tx-status pending" id="txStatus1">Pending</div>
+    </div>
+    <div class="tx-body" id="txBody1" style="display:none">
+      <div class="tx-detail">
+        <b>Contract:</b> <code id="txTo1">0x0C5Da3622e42efE0C579ef758BC8f3144018Dfc1</code><br>
+        <b>Function:</b> <code>setGameHub(address)</code><br>
+        <b>Arg:</b> <code>0xc69c7A7965Cab26fbac1991cC0faDD45a1C80F63</code> (Hub)<br>
+        <b>Result:</b> Rewards contract accepts fee calls from Hub
+      </div>
+      <div id="txHash1" class="hash-box" style="display:none">
+        <div>Tx hash: <span id="txHashVal1">—</span></div>
+        <div id="txHashNonce1" style="margin-top:3px;font-size:8px;color:var(--dim)"></div>
+      </div>
+      <div class="approval-track">
+        <div class="approval-slot" id="approvalSlot1_0"><div class="as-label">Approval 1</div><div class="as-addr wait" id="approvalAddr1_0">Waiting…</div></div>
+        <div class="approval-slot" id="approvalSlot1_1"><div class="as-label">Approval 2</div><div class="as-addr wait" id="approvalAddr1_1">Waiting…</div></div>
+      </div>
+      <div class="action-row" id="txActions1">
+        <button class="btn btn-gold" id="approveBtn1" onclick="approveHash(1)" disabled>Approve Hash</button>
+        <button class="btn btn-green" id="execBtn1" onclick="execTx(1)" disabled>Execute</button>
+      </div>
+      <button class="btn btn-ghost" style="margin-top:8px;font-size:9px" onclick="refreshTxStatus(1)">🔄 Refresh Status</button>
+    </div>
+  </div>
+
+  <!-- TX 3 -->
+  <div class="tx-item" id="txItem2">
+    <div class="tx-head" onclick="toggleTx(2)">
+      <div class="tx-num">3</div>
+      <div class="tx-name">Rewards → setStakingContract</div>
+      <div class="tx-status pending" id="txStatus2">Pending</div>
+    </div>
+    <div class="tx-body" id="txBody2" style="display:none">
+      <div class="tx-detail">
+        <b>Contract:</b> <code id="txTo2">0x0C5Da3622e42efE0C579ef758BC8f3144018Dfc1</code><br>
+        <b>Function:</b> <code>setStakingContract(address)</code><br>
+        <b>Arg:</b> <code>0x8374D50a9f48A4C0De4394f75e766cE3C741E698</code> (Staking v2)<br>
+        <b>Result:</b> Rewards routes 14% staking share to staking contract
+      </div>
+      <div id="txHash2" class="hash-box" style="display:none">
+        <div>Tx hash: <span id="txHashVal2">—</span></div>
+        <div id="txHashNonce2" style="margin-top:3px;font-size:8px;color:var(--dim)"></div>
+      </div>
+      <div class="approval-track">
+        <div class="approval-slot" id="approvalSlot2_0"><div class="as-label">Approval 1</div><div class="as-addr wait" id="approvalAddr2_0">Waiting…</div></div>
+        <div class="approval-slot" id="approvalSlot2_1"><div class="as-label">Approval 2</div><div class="as-addr wait" id="approvalAddr2_1">Waiting…</div></div>
+      </div>
+      <div class="action-row" id="txActions2">
+        <button class="btn btn-gold" id="approveBtn2" onclick="approveHash(2)" disabled>Approve Hash</button>
+        <button class="btn btn-green" id="execBtn2" onclick="execTx(2)" disabled>Execute</button>
+      </div>
+      <button class="btn btn-ghost" style="margin-top:8px;font-size:9px" onclick="refreshTxStatus(2)">🔄 Refresh Status</button>
+    </div>
+  </div>
+
+  <!-- TX 4 -->
+  <div class="tx-item" id="txItem3">
+    <div class="tx-head" onclick="toggleTx(3)">
+      <div class="tx-num">4</div>
+      <div class="tx-name">GameplayPool → authorise Hub</div>
+      <div class="tx-status pending" id="txStatus3">Pending</div>
+    </div>
+    <div class="tx-body" id="txBody3" style="display:none">
+      <div class="tx-detail">
+        <b>Contract:</b> <code id="txTo3">0x6CcFa834083E60fF7666209fB2b8A8c3bd79E120</code><br>
+        <b>Function:</b> <code>setAuthorised(address,bool)</code><br>
+        <b>Args:</b> <code>0xc69c7A7965Cab26fbac1991cC0faDD45a1C80F63</code>, <code>true</code><br>
+        <b>Result:</b> Hub can call payReward() to give winners REALM from the 48M pool
+      </div>
+      <div id="txHash3" class="hash-box" style="display:none">
+        <div>Tx hash: <span id="txHashVal3">—</span></div>
+        <div id="txHashNonce3" style="margin-top:3px;font-size:8px;color:var(--dim)"></div>
+      </div>
+      <div class="approval-track">
+        <div class="approval-slot" id="approvalSlot3_0"><div class="as-label">Approval 1</div><div class="as-addr wait" id="approvalAddr3_0">Waiting…</div></div>
+        <div class="approval-slot" id="approvalSlot3_1"><div class="as-label">Approval 2</div><div class="as-addr wait" id="approvalAddr3_1">Waiting…</div></div>
+      </div>
+      <div class="action-row" id="txActions3">
+        <button class="btn btn-gold" id="approveBtn3" onclick="approveHash(3)" disabled>Approve Hash</button>
+        <button class="btn btn-green" id="execBtn3" onclick="execTx(3)" disabled>Execute</button>
+      </div>
+      <button class="btn btn-ghost" style="margin-top:8px;font-size:9px" onclick="refreshTxStatus(3)">🔄 Refresh Status</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- LOG -->
+<div class="card">
+  <div class="card-title">📟 Activity Log</div>
+  <div class="log" id="activityLog">
+    <div class="log-entry dim">Waiting for wallet connection…</div>
+  </div>
+  <button class="btn btn-ghost" style="margin-top:10px;font-size:9px" onclick="document.getElementById('activityLog').innerHTML=''">Clear Log</button>
+</div>
+
+</div><!-- /wrap -->
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════════
+const SAFE_ADDR   = '0xf88104BDaD09209600298B922193DB4351D104f8';
+const CHAIN_ID    = 1116; // Core Mainnet
+const CHAIN_HEX   = '0x45c';
+
+const C = {
+  HUB:          '0xc69c7A7965Cab26fbac1991cC0faDD45a1C80F63',
+  REWARDS:      '0x0C5Da3622e42efE0C579ef758BC8f3144018Dfc1',
+  STAKING:      '0x8374D50a9f48A4C0De4394f75e766cE3C741E698',
+  GAMEPLAY_POOL:'0x6CcFa834083E60fF7666209fB2b8A8c3bd79E120',
+};
+
+// Transaction definitions
+const TRANSACTIONS = [
+  {
+    to: C.HUB,
+    fn: 'setRewardsContract(address)',
+    args: [C.REWARDS],
+    label: 'Hub → setRewardsContract',
+  },
+  {
+    to: C.REWARDS,
+    fn: 'setGameHub(address)',
+    args: [C.HUB],
+    label: 'Rewards → setGameHub',
+  },
+  {
+    to: C.REWARDS,
+    fn: 'setStakingContract(address)',
+    args: [C.STAKING],
+    label: 'Rewards → setStakingContract',
+  },
+  {
+    to: C.GAMEPLAY_POOL,
+    fn: 'setAuthorised(address,bool)',
+    args: [C.HUB, true],
+    label: 'GameplayPool → authorise Hub',
+  },
+];
+
+// ── GNOSIS SAFE ABIs ──
+const SAFE_ABI = [
+  'function nonce() view returns (uint256)',
+  'function getThreshold() view returns (uint256)',
+  'function getOwners() view returns (address[])',
+  'function isOwner(address owner) view returns (bool)',
+  'function approvedHashes(address owner, bytes32 hash) view returns (uint256)',
+  'function approveHash(bytes32 hashToApprove)',
+  'function getTransactionHash(address to, uint256 value, bytes data, uint8 operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address refundReceiver, uint256 _nonce) view returns (bytes32)',
+  'function execTransaction(address to, uint256 value, bytes data, uint8 operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address payable refundReceiver, bytes signatures) payable returns (bool)',
+];
+
+// ── GLOBALS ──
+let provider, signer, userAddr, safeC;
+let safeOwners = [];
+let safeThreshold = 2;
+
+// Per-tx state: { txHash, nonce, approvals: [] }
+const txState = [null, null, null, null];
+
+// ═══════════════════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════════════════
+function log(msg, type='dim') {
+  const el = document.getElementById('activityLog');
+  const d = document.createElement('div');
+  d.className = 'log-entry '+type;
+  d.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+}
+
+function encodeCalldata(fnSig, args) {
+  const iface = new ethers.utils.Interface(['function '+fnSig]);
+  const name = fnSig.split('(')[0];
+  return iface.encodeFunctionData(name, args);
+}
+
+function shortAddr(a) {
+  if(!a) return '—';
+  return a.slice(0,8)+'…'+a.slice(-6);
+}
+
+// ═══════════════════════════════════════════════════════════
+// WALLET
+// ═══════════════════════════════════════════════════════════
+async function connectWallet() {
+  try {
+    if(!window.ethereum) return log('MetaMask not found — install it','er');
+    await window.ethereum.request({method:'eth_requestAccounts'});
+    provider = new ethers.providers.Web3Provider(window.ethereum);
+
+    // Check/switch chain
+    const net = await provider.getNetwork();
+    if(net.chainId !== CHAIN_ID) {
+      log('Switching to Core Mainnet…','in');
+      try {
+        await window.ethereum.request({method:'wallet_switchEthereumChain',params:[{chainId:CHAIN_HEX}]});
+      } catch(sw) {
+        if(sw.code===4902) {
+          await window.ethereum.request({method:'wallet_addEthereumChain',params:[{
+            chainId:CHAIN_HEX,chainName:'Core Blockchain Mainnet',
+            rpcUrls:['https://rpc.coredao.org'],
+            nativeCurrency:{name:'CORE',symbol:'CORE',decimals:18},
+            blockExplorerUrls:['https://scan.coredao.org']
+          }]});
+        } else throw sw;
+      }
+      provider = new ethers.providers.Web3Provider(window.ethereum);
+    }
+
+    signer = provider.getSigner();
+    userAddr = await signer.getAddress();
+    safeC = new ethers.Contract(SAFE_ADDR, SAFE_ABI, provider);
+
+    // Load Safe state
+    const [nonce, threshold, owners] = await Promise.all([
+      safeC.nonce(),
+      safeC.getThreshold(),
+      safeC.getOwners(),
+    ]);
+    safeOwners = owners;
+    safeThreshold = threshold.toNumber();
+
+    document.getElementById('safeNonce').textContent = nonce.toString();
+    document.getElementById('safeNonce').className = 'ss-val green';
+    document.getElementById('safeThreshold').textContent = `${safeThreshold} / ${safeOwners.length}`;
+    document.getElementById('safeThreshold').className = 'ss-val green';
+
+    const isOwner = owners.map(o=>o.toLowerCase()).includes(userAddr.toLowerCase());
+    document.getElementById('connectedAs').textContent = shortAddr(userAddr);
+    document.getElementById('connectedAs').className = isOwner ? 'ss-val green' : 'ss-val red';
+
+    const row = document.getElementById('walletRow');
+    row.style.display = 'flex';
+    document.getElementById('walletAddr').textContent = userAddr;
+    document.getElementById('walletRole').innerHTML = isOwner
+      ? '<span class="owner-tag">✅ Safe Owner</span>'
+      : '<span class="not-owner-tag">⚠️ Not Owner</span>';
+
+    document.getElementById('connectBtn').textContent = 'Reconnect';
+
+    log(`Connected: ${shortAddr(userAddr)} · Safe nonce: ${nonce}`, 'ok');
+    log(`Safe owners: ${safeOwners.map(shortAddr).join(', ')}`, 'dim');
+    if(!isOwner) log('⚠️ Your wallet is NOT a Safe owner. You can watch but cannot approve.', 'er');
+
+    // Enable approve buttons for owners, refresh all tx statuses
+    for(let i=0;i<4;i++) {
+      if(isOwner) document.getElementById(`approveBtn${i}`).disabled = false;
+      await computeTxHash(i);
+    }
+
+  } catch(e) {
+    log('Connection error: '+e.message, 'er');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// SAFE TX HASH
+// ═══════════════════════════════════════════════════════════
+async function computeTxHash(idx) {
+  if(!safeC) return;
+  try {
+    const tx = TRANSACTIONS[idx];
+    const data = encodeCalldata(tx.fn, tx.args);
+
+    // Each tx uses the nonce RELATIVE to when it will be executed.
+    // We compute with nonce+idx (assuming sequential execution).
+    const baseNonce = (await safeC.nonce()).toNumber();
+    const txNonce = baseNonce + idx;
+
+    // Use Safe's own getTransactionHash — guaranteed to match what the contract checks
+    const hash = await safeC.getTransactionHash(
+      tx.to,          // to
+      0,              // value
+      data,           // data
+      0,              // operation (CALL)
+      0,              // safeTxGas
+      0,              // baseGas
+      0,              // gasPrice
+      ethers.constants.AddressZero, // gasToken
+      ethers.constants.AddressZero, // refundReceiver
+      txNonce         // nonce
+    );
+
+    txState[idx] = { hash, nonce: txNonce, data, approvals: [] };
+
+    // Show hash
+    const hashEl = document.getElementById(`txHash${idx}`);
+    hashEl.style.display = 'block';
+    document.getElementById(`txHashVal${idx}`).textContent = hash;
+    document.getElementById(`txHashNonce${idx}`).textContent = `Nonce: ${txNonce} · Data: ${data.slice(0,18)}…`;
+
+    await refreshTxStatus(idx);
+  } catch(e) {
+    log(`TX${idx+1} hash error: ${e.message}`, 'er');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// APPROVAL STATUS
+// ═══════════════════════════════════════════════════════════
+async function refreshTxStatus(idx) {
+  if(!safeC || !txState[idx]) return;
+  const { hash } = txState[idx];
+
+  // Check each owner's approval
+  const checks = await Promise.all(
+    safeOwners.map(owner => safeC.approvedHashes(owner, hash))
+  );
+
+  const approved = safeOwners.filter((o,i) => checks[i].gt(0));
+  txState[idx].approvals = approved;
+
+  // Update approval slots
+  for(let slot=0;slot<2;slot++) {
+    const slotEl = document.getElementById(`approvalSlot${idx}_${slot}`);
+    const addrEl = document.getElementById(`approvalAddr${idx}_${slot}`);
+    if(approved[slot]) {
+      slotEl.classList.add('approved');
+      addrEl.className = 'as-addr ok';
+      addrEl.textContent = '✅ '+shortAddr(approved[slot]);
+    } else {
+      slotEl.classList.remove('approved');
+      addrEl.className = 'as-addr wait';
+      addrEl.textContent = 'Waiting…';
+    }
+  }
+
+  // Update status badge + exec button
+  const canExec = approved.length >= safeThreshold;
+  const statusEl = document.getElementById(`txStatus${idx}`);
+  const execBtn = document.getElementById(`execBtn${idx}`);
+
+  if(canExec) {
+    statusEl.textContent = `Ready (${approved.length}/${safeThreshold})`;
+    statusEl.className = 'tx-status ready';
+    execBtn.disabled = false;
+  } else {
+    statusEl.textContent = `Needs ${safeThreshold - approved.length} more`;
+    statusEl.className = 'tx-status pending';
+    execBtn.disabled = true;
+  }
+
+  // Check if already done (nonce moved past this one)
+  const currentNonce = (await safeC.nonce()).toNumber();
+  if(currentNonce > txState[idx].nonce) {
+    statusEl.textContent = '✅ Done';
+    statusEl.className = 'tx-status done';
+    document.getElementById(`approveBtn${idx}`).disabled = true;
+    execBtn.disabled = true;
+    log(`TX${idx+1} already executed (nonce ${txState[idx].nonce} < current ${currentNonce})`, 'ok');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// APPROVE HASH
+// ═══════════════════════════════════════════════════════════
+async function approveHash(idx) {
+  if(!signer || !txState[idx]) return;
+  const { hash } = txState[idx];
+  try {
+    log(`Approving hash for TX${idx+1}…`, 'in');
+    const safeSigner = new ethers.Contract(SAFE_ADDR, SAFE_ABI, signer);
+    const tx = await safeSigner.approveHash(hash, {gasLimit:80000, type:0});
+    log(`Approve tx sent: ${tx.hash.slice(0,18)}…`, 'in');
+    await tx.wait();
+    log(`✅ TX${idx+1} approved by ${shortAddr(userAddr)}`, 'ok');
+    await refreshTxStatus(idx);
+  } catch(e) {
+    log(`Approve error TX${idx+1}: ${e.reason||e.message}`, 'er');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// EXECUTE TRANSACTION
+// ═══════════════════════════════════════════════════════════
+async function execTx(idx) {
+  if(!signer || !txState[idx]) return;
+  const { hash, nonce, data, approvals } = txState[idx];
+  const tx = TRANSACTIONS[idx];
+
+  if(approvals.length < safeThreshold) {
+    log(`Need ${safeThreshold} approvals, only have ${approvals.length}`, 'er');
+    return;
+  }
+
+  try {
+    log(`Executing TX${idx+1}: ${tx.label}…`, 'in');
+
+    // Build signatures for approved hashes.
+    // For each signer who called approveHash, the signature is:
+    // r = bytes32(owner address)  →  uint256(owner)
+    // s = bytes32(0)
+    // v = 1  (signals "approved hash" type)
+    // Signers MUST be sorted ascending by address.
+    const sortedApprovals = [...approvals].sort(
+      (a,b) => a.toLowerCase() < b.toLowerCase() ? -1 : 1
+    );
+
+    let signatures = '0x';
+    for(const owner of sortedApprovals) {
+      // r: address padded to 32 bytes
+      const r = ethers.utils.hexZeroPad(owner, 32).slice(2);
+      // s: 32 zero bytes
+      const s = '0'.repeat(64);
+      // v: 0x01 (approved hash)
+      const v = '01';
+      signatures += r + s + v;
+    }
+
+    const safeSigner = new ethers.Contract(SAFE_ADDR, SAFE_ABI, signer);
+    const execTxResult = await safeSigner.execTransaction(
+      tx.to,
+      0,              // value
+      data,
+      0,              // operation CALL
+      0,              // safeTxGas
+      0,              // baseGas
+      0,              // gasPrice
+      ethers.constants.AddressZero,
+      ethers.constants.AddressZero,
+      signatures,
+      {gasLimit:300000, type:0}
+    );
+
+    log(`Exec tx sent: ${execTxResult.hash.slice(0,18)}…`, 'in');
+    const receipt = await execTxResult.wait();
+
+    // Check if Safe emitted ExecutionSuccess or ExecutionFailure
+    // ExecutionSuccess(bytes32 txHash, uint256 payment) = topic 0x442e715f
+    const successTopic = ethers.utils.id('ExecutionSuccess(bytes32,uint256)');
+    const failTopic    = ethers.utils.id('ExecutionFailure(bytes32,uint256)');
+    const success = receipt.logs.some(l => l.topics[0] === successTopic);
+    const failed  = receipt.logs.some(l => l.topics[0] === failTopic);
+
+    if(failed) {
+      log(`❌ TX${idx+1}: Safe executed but inner call REVERTED. Check target contract.`, 'er');
+    } else if(success) {
+      log(`✅ TX${idx+1} executed successfully!`, 'ok');
+      document.getElementById(`txStatus${idx}`).textContent = '✅ Done';
+      document.getElementById(`txStatus${idx}`).className = 'tx-status done';
+      document.getElementById(`approveBtn${idx}`).disabled = true;
+      document.getElementById(`execBtn${idx}`).disabled = true;
+      // Recompute hashes for remaining txs since nonce advanced
+      for(let j=idx+1;j<4;j++) await computeTxHash(j);
+    } else {
+      log(`TX${idx+1}: No clear success/failure event found. Check scan.coredao.org`, 'in');
+    }
+
+  } catch(e) {
+    log(`Exec error TX${idx+1}: ${e.reason||e.message}`, 'er');
+    console.error(e);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════════════════════════
+function toggleTx(idx) {
+  const body = document.getElementById(`txBody${idx}`);
+  body.style.display = body.style.display === 'none' ? 'block' : 'none';
+}
+
+// Auto-open first tx
+toggleTx(0);
+
+// Listen for account/chain changes
+if(window.ethereum) {
+  window.ethereum.on('accountsChanged', ()=>location.reload());
+  window.ethereum.on('chainChanged', ()=>location.reload());
+}
+</script>
+</body>
+</html>
