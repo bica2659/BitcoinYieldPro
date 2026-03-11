@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CrossRealm — Set Emission Rate</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d0d1a; color: #e0e0ff; font-family: 'Courier New', monospace; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .card { background: #13132a; border: 1px solid #2a2a4a; border-radius: 12px; padding: 32px; max-width: 600px; width: 100%; }
+  h1 { color: #f0b429; font-size: 18px; margin-bottom: 6px; }
+  .sub { color: #666; font-size: 12px; margin-bottom: 28px; }
+  .info-box { background: #0a0a1a; border: 1px solid #1a3a1a; border-radius: 8px; padding: 16px; margin-bottom: 24px; }
+  .info-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #1a1a2a; font-size: 13px; }
+  .info-row:last-child { border-bottom: none; }
+  .label { color: #888; }
+  .val { color: #4ade80; font-weight: bold; }
+  .val.gold { color: #f0b429; }
+  .val.blue { color: #60a5fa; }
+  .section { margin-bottom: 20px; }
+  .section label { display: block; font-size: 12px; color: #888; margin-bottom: 6px; }
+  input { width: 100%; background: #0a0a1a; border: 1px solid #2a2a4a; border-radius: 6px; padding: 10px 14px; color: #e0e0ff; font-family: monospace; font-size: 13px; }
+  input:focus { outline: none; border-color: #f0b429; }
+  .btn { width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; letter-spacing: 1px; margin-top: 8px; transition: all 0.2s; }
+  .btn-connect { background: #f0b429; color: #000; }
+  .btn-connect:hover { background: #ffc947; }
+  .btn-set { background: linear-gradient(135deg, #4ade80, #22c55e); color: #000; }
+  .btn-set:hover { background: linear-gradient(135deg, #6ee7a0, #4ade80); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .status { margin-top: 16px; padding: 12px; border-radius: 8px; font-size: 13px; display: none; }
+  .status.ok  { background: #0a1a0a; border: 1px solid #22c55e; color: #4ade80; display: block; }
+  .status.err { background: #1a0a0a; border: 1px solid #ef4444; color: #f87171; display: block; }
+  .status.in  { background: #0a0a1a; border: 1px solid #60a5fa; color: #93c5fd; display: block; }
+  .warning { background: #1a1000; border: 1px solid #f0b429; border-radius: 8px; padding: 14px; margin-bottom: 20px; font-size: 12px; color: #f0b429; }
+  .divider { border: none; border-top: 1px solid #2a2a4a; margin: 20px 0; }
+  .current-box { background: #0a0a1a; border: 1px solid #2a2a4a; border-radius: 8px; padding: 16px; margin-bottom: 20px; font-size: 12px; }
+  .current-box .title { color: #888; margin-bottom: 10px; font-size: 11px; letter-spacing: 1px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>⚙️ CrossRealm — Set Emission Rate</h1>
+  <div class="sub">REALMStaking v2 · Owner only · Core Mainnet (1116)</div>
+
+  <div class="warning">
+    ⚠️ Must connect with owner wallet: <strong>0x73a6eA93A7BF0FC9F8D3C997AEDD046A6ED79054</strong>
+  </div>
+
+  <!-- Target Config -->
+  <div class="info-box">
+    <div class="info-row"><span class="label">Target emission</span><span class="val">84,000 REALM / month</span></div>
+    <div class="info-row"><span class="label">Per day</span><span class="val">2,800 REALM</span></div>
+    <div class="info-row"><span class="label">Per year</span><span class="val">1,008,000 REALM</span></div>
+    <div class="info-row"><span class="label">9M reserve runway</span><span class="val">~8.93 years</span></div>
+    <div class="info-row"><span class="label">APY (9M pool)</span><span class="val gold">11.20%</span></div>
+    <div class="info-row"><span class="label">APY (30M pool, now)</span><span class="val gold">3.36%</span></div>
+    <div class="info-row"><span class="label">New emissionPerSecond</span><span class="val blue">32407407407407404 wei</span></div>
+  </div>
+
+  <!-- Current state -->
+  <div class="current-box" id="currentBox">
+    <div class="title">📊 CURRENT CONTRACT STATE</div>
+    <div id="currentState" style="color:#666">Connect wallet to read live state…</div>
+  </div>
+
+  <button class="btn btn-connect" id="connectBtn" onclick="connectWallet()">CONNECT OWNER WALLET</button>
+
+  <hr class="divider">
+
+  <!-- Set emission -->
+  <div class="section">
+    <label>EMISSION PER SECOND (wei) — pre-filled with correct value</label>
+    <input type="text" id="emissionInput" value="32407407407407404" />
+  </div>
+
+  <button class="btn btn-set" id="setBtn" onclick="setEmission()" disabled>SET EMISSION RATE</button>
+
+  <hr class="divider">
+
+  <!-- Transfer reserve -->
+  <div class="section">
+    <label>TRANSFER RESERVE REALM TO STAKING (from owner wallet)</label>
+    <input type="text" id="transferAmount" placeholder="e.g. 9000000" value="9000000" />
+    <small style="color:#666; font-size:11px; margin-top:4px; display:block">
+      Direct ERC20 transfer — increases liquid reserve. Make sure vault/wallet holds enough REALM first.
+    </small>
+  </div>
+  <button class="btn" id="transferBtn" onclick="transferReserve()" disabled style="background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;margin-top:8px">
+    TRANSFER 9M REALM TO STAKING
+  </button>
+
+  <div class="status" id="status"></div>
+</div>
+
+<script>
+const STAKING   = "0x8374D50a9f48A4C0De4394f75e766cE3C741E698";
+const REALM     = "0x736C7B66F0Dd6dB1bB20f365f6aED498d8059b4A";
+const OWNER     = "0x73a6eA93A7BF0FC9F8D3C997AEDD046A6ED79054";
+const NEW_RATE  = "32407407407407404";
+
+const STAKING_ABI = [
+  "function setEmissionRate(uint256 _newRate) external",
+  "function emissionPerSecond() view returns (uint256)",
+  "function totalStaked() view returns (uint256)",
+  "function liquidReserve() view returns (uint256)",
+  "function pendingRewards(address) view returns (uint256)",
+  "function owner() view returns (address)"
+];
+const ERC20_ABI = [
+  "function transfer(address to, uint256 amount) returns (bool)",
+  "function balanceOf(address) view returns (uint256)",
+  "function decimals() view returns (uint8)"
+];
+
+let provider, signer, stakingC, realmC, userAddr;
+
+function toast(msg, type) {
+  const el = document.getElementById('status');
+  el.className = 'status ' + type;
+  el.textContent = msg;
+}
+
+async function connectWallet() {
+  try {
+    if(!window.ethereum) return toast('No wallet found — install MetaMask', 'err');
+    provider = new ethers.providers.Web3Provider(window.ethereum);
+    await provider.send("eth_requestAccounts", []);
+
+    const net = await provider.getNetwork();
+    if(net.chainId !== 1116) {
+      try {
+        await window.ethereum.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: '0x45C' }]
+        });
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+      } catch(e) {
+        return toast('Please switch to Core Mainnet (Chain ID 1116)', 'err');
+      }
+    }
+
+    signer   = provider.getSigner();
+    userAddr = await signer.getAddress();
+
+    if(userAddr.toLowerCase() !== OWNER.toLowerCase()) {
+      toast(`⚠️ Connected: ${userAddr.slice(0,8)}… — NOT the owner wallet. Set emission will fail.`, 'err');
+    } else {
+      toast(`✅ Owner wallet connected: ${userAddr.slice(0,8)}…`, 'ok');
+    }
+
+    stakingC = new ethers.Contract(STAKING, STAKING_ABI, signer);
+    realmC   = new ethers.Contract(REALM, ERC20_ABI, signer);
+
+    document.getElementById('connectBtn').textContent = userAddr.slice(0,8) + '…' + userAddr.slice(-6);
+    document.getElementById('setBtn').disabled = false;
+    document.getElementById('transferBtn').disabled = false;
+
+    await loadState();
+  } catch(e) {
+    toast('Connect error: ' + (e.message||e), 'err');
+  }
+}
+
+async function loadState() {
+  try {
+    const [currentRate, totalStaked, liquidRes, pending, bal] = await Promise.all([
+      stakingC.emissionPerSecond(),
+      stakingC.totalStaked(),
+      stakingC.liquidReserve(),
+      stakingC.pendingRewards(userAddr),
+      realmC.balanceOf(STAKING)
+    ]);
+
+    const fmt = (n) => parseFloat(ethers.utils.formatEther(n)).toLocaleString('en', {maximumFractionDigits:4});
+    const rateNum = parseFloat(ethers.utils.formatEther(currentRate));
+    const rateMonth = rateNum * 30 * 86400;
+
+    document.getElementById('currentState').innerHTML = `
+      <div style="display:grid;gap:6px">
+        <div style="display:flex;justify-content:space-between"><span style="color:#888">Current rate/sec</span><span style="color:${currentRate.toString()===NEW_RATE?'#4ade80':'#f87171'}">${currentRate.toString()} wei</span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:#888">Current rate/month</span><span style="color:${currentRate.toString()===NEW_RATE?'#4ade80':'#f87171'}">${rateMonth.toFixed(4)} REALM</span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:#888">Total staked</span><span style="color:#e0e0ff">${fmt(totalStaked)} REALM</span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:#888">Liquid reserve</span><span style="color:#60a5fa">${fmt(liquidRes)} REALM</span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:#888">Contract REALM balance</span><span style="color:#60a5fa">${fmt(bal)} REALM</span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:#888">Your pending rewards</span><span style="color:#f0b429">${fmt(pending)} REALM</span></div>
+        ${currentRate.toString()===NEW_RATE ? '<div style="color:#4ade80;margin-top:4px">✅ Emission already set correctly!</div>' : '<div style="color:#f87171;margin-top:4px">❌ Emission needs updating</div>'}
+      </div>
+    `;
+  } catch(e) {
+    document.getElementById('currentState').innerHTML = '<span style="color:#f87171">Error reading state: ' + e.message + '</span>';
+  }
+}
+
+async function setEmission() {
+  const rate = document.getElementById('emissionInput').value.trim();
+  if(!rate) return toast('Enter emission rate', 'err');
+  try {
+    toast('⏳ Sending transaction…', 'in');
+    document.getElementById('setBtn').disabled = true;
+    const tx = await stakingC.setEmissionRate(rate, { gasLimit: 100000, type: 0 });
+    toast('⏳ Confirming… tx: ' + tx.hash.slice(0,18) + '…', 'in');
+    await tx.wait();
+    toast('✅ Emission rate updated! 84,000 REALM/month now active.', 'ok');
+    await loadState();
+  } catch(e) {
+    const reason = e.reason || e.data?.message || e.message || String(e);
+    toast('❌ ' + reason.slice(0,200), 'err');
+  } finally {
+    document.getElementById('setBtn').disabled = false;
+  }
+}
+
+async function transferReserve() {
+  const amount = document.getElementById('transferAmount').value.trim();
+  if(!amount) return toast('Enter transfer amount', 'err');
+  try {
+    const amountWei = ethers.utils.parseEther(amount);
+    toast('⏳ Transferring ' + amount + ' REALM to staking contract…', 'in');
+    document.getElementById('transferBtn').disabled = true;
+
+    // Check balance first
+    const bal = await realmC.balanceOf(userAddr);
+    if(bal.lt(amountWei)) {
+      return toast('❌ Insufficient REALM balance in connected wallet', 'err');
+    }
+
+    const tx = await realmC.transfer(STAKING, amountWei, { gasLimit: 100000, type: 0 });
+    toast('⏳ Confirming… tx: ' + tx.hash.slice(0,18) + '…', 'in');
+    await tx.wait();
+    toast('✅ ' + amount + ' REALM transferred to staking reserve!', 'ok');
+    await loadState();
+  } catch(e) {
+    const reason = e.reason || e.data?.message || e.message || String(e);
+    toast('❌ ' + reason.slice(0,200), 'err');
+  } finally {
+    document.getElementById('transferBtn').disabled = false;
+  }
+}
+</script>
+</body>
+</html>
