@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CrossRealm World</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a1a; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+  #canvas-container { width: 100vw; height: 100vh; position: relative; }
+  canvas { display: block; }
+
+/* HUD */
+#hud { position: fixed; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 10; }
+
+/* Top bar */
+#topbar {
+position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+display: flex; align-items: center; gap: 12px;
+background: rgba(10,10,26,0.85); border: 1px solid rgba(255,255,255,0.1);
+border-radius: 12px; padding: 8px 20px; backdrop-filter: blur(12px);
+}
+#topbar .logo { color: #e0c9ff; font-weight: 800; font-size: 16px; letter-spacing: 2px; }
+#topbar .divider { width: 1px; height: 20px; background: rgba(255,255,255,0.15); }
+#topbar .net { display: flex; align-items: center; gap: 6px; color: #4ade80; font-size: 12px; }
+#topbar .dot { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+#player-count { color: #a0a0c0; font-size: 12px; }
+
+/* Wallet panel */
+#wallet-panel {
+position: absolute; top: 16px; right: 16px; pointer-events: all;
+background: rgba(10,10,26,0.9); border: 1px solid rgba(255,255,255,0.1);
+border-radius: 12px; padding: 14px 18px; backdrop-filter: blur(12px); min-width: 200px;
+}
+#wallet-panel h3 { color: #e0c9ff; font-size: 13px; margin-bottom: 10px; font-weight: 600; }
+#connect-btn {
+width: 100%; padding: 10px; border: none; border-radius: 8px;
+background: linear-gradient(135deg, #7c3aed, #4f46e5);
+color: #fff; font-weight: 700; font-size: 13px; cursor: pointer;
+transition: all 0.2s; pointer-events: all;
+}
+#connect-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(124,58,237,0.4); }
+#wallet-info { display: none; }
+#wallet-addr { color: #c4b5fd; font-size: 12px; font-family: monospace; }
+#realm-bal { color: #4ade80; font-size: 20px; font-weight: 700; margin: 4px 0; }
+#realm-label { color: #6b7280; font-size: 11px; }
+
+/* Controls hint */
+#controls {
+position: absolute; bottom: 16px; left: 16px;
+background: rgba(10,10,26,0.8); border: 1px solid rgba(255,255,255,0.08);
+border-radius: 10px; padding: 12px 16px; backdrop-filter: blur(8px);
+}
+#controls h4 { color: #a0a0c0; font-size: 11px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
+.ctrl { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+.key {
+background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15);
+border-radius: 4px; padding: 2px 7px; font-size: 11px; color: #c4b5fd; font-weight: 600;
+}
+.ctrl span { color: #6b7280; font-size: 11px; }
+
+/* Minimap */
+#minimap {
+position: absolute; bottom: 16px; right: 16px;
+width: 160px; height: 160px; border-radius: 10px; overflow: hidden;
+border: 1px solid rgba(255,255,255,0.1); background: rgba(10,10,26,0.9);
+}
+#minimap canvas { width: 100%; height: 100%; }
+#minimap-label { position: absolute; top: 6px; left: 8px; color: #a0a0c0; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
+
+/* Nearby players */
+#nearby {
+position: absolute; top: 80px; left: 16px;
+background: rgba(10,10,26,0.85); border: 1px solid rgba(255,255,255,0.08);
+border-radius: 10px; padding: 12px 14px; backdrop-filter: blur(8px); min-width: 180px;
+}
+#nearby h4 { color: #a0a0c0; font-size: 11px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
+.player-entry { display: flex; align-items: center; gap: 8px; margin: 5px 0; }
+.player-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.player-name { color: #e0e0f0; font-size: 12px; }
+.player-dist { color: #6b7280; font-size: 11px; margin-left: auto; }
+
+/* Trade prompt */
+#trade-prompt {
+position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+background: rgba(10,10,26,0.95); border: 1px solid rgba(124,58,237,0.4);
+border-radius: 14px; padding: 20px 28px; backdrop-filter: blur(16px);
+text-align: center; display: none; pointer-events: all;
+}
+#trade-prompt h3 { color: #e0c9ff; margin-bottom: 8px; }
+#trade-prompt p { color: #6b7280; font-size: 13px; margin-bottom: 16px; }
+.prompt-btns { display: flex; gap: 10px; justify-content: center; }
+.btn-trade { padding: 8px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; font-size: 13px; }
+.btn-yes { background: linear-gradient(135deg, #7c3aed, #4f46e5); color: #fff; }
+.btn-no { background: rgba(255,255,255,0.08); color: #a0a0c0; }
+
+/* Zone label */
+#zone-label {
+position: absolute; top: 70px; left: 50%; transform: translateX(-50%);
+color: rgba(255,255,255,0.5); font-size: 12px; text-transform: uppercase;
+letter-spacing: 2px; text-align: center; pointer-events: none;
+}
+
+/* Connect overlay */
+#connect-overlay {
+position: fixed; inset: 0; background: rgba(5,5,15,0.97);
+display: flex; flex-direction: column; align-items: center; justify-content: center;
+z-index: 100;
+}
+#connect-overlay h1 { color: #e0c9ff; font-size: 52px; font-weight: 900; letter-spacing: 4px; margin-bottom: 8px; }
+#connect-overlay p { color: #6b7280; font-size: 16px; margin-bottom: 40px; }
+#connect-overlay .city-preview {
+width: 400px; height: 200px; border: 1px solid rgba(124,58,237,0.3);
+border-radius: 16px; overflow: hidden; margin-bottom: 40px; position: relative;
+background: linear-gradient(to bottom, #0a0a2e 0%, #1a0a3e 50%, #0d1a0d 100%);
+}
+.city-silhouette {
+position: absolute; bottom: 0; left: 0; right: 0; height: 120px;
+background: linear-gradient(to top, rgba(124,58,237,0.15), transparent);
+display: flex; align-items: flex-end; justify-content: center; gap: 4px; padding: 0 20px;
+}
+.building { background: rgba(124,58,237,0.4); border-radius: 2px 2px 0 0; }
+#enter-btn {
+padding: 16px 48px; border: none; border-radius: 12px;
+background: linear-gradient(135deg, #7c3aed, #4f46e5);
+color: #fff; font-weight: 800; font-size: 18px; cursor: pointer;
+transition: all 0.2s; letter-spacing: 1px;
+}
+#enter-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(124,58,237,0.5); }
+#enter-btn.disabled { opacity: 0.4; cursor: not-allowed; }
+#overlay-wallet-status { color: #c4b5fd; font-size: 13px; margin-bottom: 16px; min-height: 20px; }
+</style>
+
+</head>
+<body>
+
+<!-- Connect overlay -->
+
+<div id="connect-overlay">
+  <h1>CROSSREALM</h1>
+  <p>Connect your wallet to enter the world</p>
+  <div class="city-preview">
+    <div class="city-silhouette" id="silhouette"></div>
+  </div>
+  <div id="overlay-wallet-status">No wallet connected</div>
+  <button id="enter-btn" onclick="enterWorld()">Connect & Enter World</button>
+</div>
+
+<!-- Main HUD -->
+
+<div id="hud">
+  <div id="topbar">
+    <span class="logo">CROSSREALM</span>
+    <div class="divider"></div>
+    <div class="net"><div class="dot"></div>CORE Mainnet</div>
+    <div class="divider"></div>
+    <span id="player-count">0 players online</span>
+  </div>
+
+  <div id="wallet-panel">
+    <h3>🦊 Wallet</h3>
+    <button id="connect-btn" onclick="connectWallet()">Connect Wallet</button>
+    <div id="wallet-info">
+      <div id="wallet-addr">0x0000...0000</div>
+      <div id="realm-bal">0</div>
+      <div id="realm-label">REALM</div>
+    </div>
+  </div>
+
+  <div id="nearby">
+    <h4>👥 Nearby Players</h4>
+    <div id="nearby-list"><span style="color:#4a4a6a;font-size:12px;">No players nearby</span></div>
+  </div>
+
+  <div id="zone-label" id="zone-label">DOWNTOWN — DISTRICT 1</div>
+
+  <div id="controls">
+    <h4>Controls</h4>
+    <div class="ctrl"><span class="key">W A S D</span><span>Move</span></div>
+    <div class="ctrl"><span class="key">Mouse</span><span>Look</span></div>
+    <div class="ctrl"><span class="key">Shift</span><span>Sprint</span></div>
+    <div class="ctrl"><span class="key">E</span><span>Interact</span></div>
+    <div class="ctrl"><span class="key">Tab</span><span>Map</span></div>
+  </div>
+
+  <div id="minimap">
+    <canvas id="minimap-canvas" width="160" height="160"></canvas>
+    <div id="minimap-label">Map</div>
+  </div>
+
+  <div id="trade-prompt">
+    <h3>💱 Trade Request</h3>
+    <p id="trade-msg">Player nearby — initiate trade?</p>
+    <div class="prompt-btns">
+      <button class="btn-trade btn-yes" onclick="closeTrade()">Trade</button>
+      <button class="btn-trade btn-no" onclick="closeTrade()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="canvas-container"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script>
+// ─── CROSSREALM WORLD ENGINE ───────────────────────────────────────────────
+
+// Gun.js CDN (P2P sync)
+const gunScript = document.createElement('script');
+gunScript.src = 'https://cdn.jsdelivr.net/npm/gun/gun.js';
+gunScript.onload = () => initGun();
+document.head.appendChild(gunScript);
+
+// ─── SCENE SETUP ──────────────────────────────────────────────────────────
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.8;
+renderer.setClearColor(0x050510);
+document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x050510, 0.018);
+
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 500);
+camera.position.set(0, 2.2, 0);
+
+// ─── LIGHTING ─────────────────────────────────────────────────────────────
+const ambientLight = new THREE.AmbientLight(0x1a1a3e, 0.6);
+scene.add(ambientLight);
+
+const moonLight = new THREE.DirectionalLight(0x8888cc, 0.4);
+moonLight.position.set(-50, 80, -30);
+moonLight.castShadow = true;
+moonLight.shadow.mapSize.set(2048, 2048);
+moonLight.shadow.camera.far = 200;
+moonLight.shadow.camera.left = -100;
+moonLight.shadow.camera.right = 100;
+moonLight.shadow.camera.top = 100;
+moonLight.shadow.camera.bottom = -100;
+scene.add(moonLight);
+
+// ─── MATERIALS ────────────────────────────────────────────────────────────
+const mats = {
+  road: new THREE.MeshLambertMaterial({ color: 0x111118 }),
+  sidewalk: new THREE.MeshLambertMaterial({ color: 0x1a1a2a }),
+  grass: new THREE.MeshLambertMaterial({ color: 0x0a1a0a }),
+  glass: new THREE.MeshLambertMaterial({ color: 0x1a2a4a, transparent: true, opacity: 0.7 }),
+  concrete: new THREE.MeshLambertMaterial({ color: 0x1a1a22 }),
+  neon_purple: new THREE.MeshBasicMaterial({ color: 0x7c3aed }),
+  neon_blue: new THREE.MeshBasicMaterial({ color: 0x3b82f6 }),
+  neon_green: new THREE.MeshBasicMaterial({ color: 0x4ade80 }),
+  neon_pink: new THREE.MeshBasicMaterial({ color: 0xec4899 }),
+  white: new THREE.MeshBasicMaterial({ color: 0xffffff }),
+};
+
+// ─── CITY BUILDER ─────────────────────────────────────────────────────────
+function box(w, h, d, mat, x, y, z, cast = true) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  m.position.set(x, y, z);
+  m.castShadow = cast;
+  m.receiveShadow = true;
+  scene.add(m);
+  return m;
+}
+
+// Ground
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), mats.grass);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// Road grid
+function road(w, d, x, z) { box(w, 0.05, d, mats.road, x, 0.02, z, false); }
+function sidewalk(w, d, x, z) { box(w, 0.1, d, mats.sidewalk, x, 0.05, z, false); }
+
+// Main roads
+road(200, 8, 0, 0);     // East-West main
+road(8, 200, 0, 0);     // North-South main
+road(200, 6, 0, 40);    road(200, 6, 0, -40);
+road(6, 200, 40, 0);    road(6, 200, -40, 0);
+road(200, 5, 0, 80);    road(200, 5, 0, -80);
+road(5, 200, 80, 0);    road(5, 200, -80, 0);
+
+// Sidewalks along main road
+sidewalk(200, 2, 0, 4.5);   sidewalk(200, 2, 0, -4.5);
+sidewalk(2, 200, 4.5, 0);   sidewalk(2, 200, -4.5, 0);
+
+// ─── BUILDINGS ────────────────────────────────────────────────────────────
+const BUILDING_CONFIGS = [
+  // Downtown core
+  { x: 18, z: 18, w: 12, d: 12, h: 45, mat: 'glass', neon: 'neon_purple', district: 1 },
+  { x: -18, z: 18, w: 10, d: 10, h: 38, mat: 'concrete', neon: 'neon_blue', district: 1 },
+  { x: 18, z: -18, w: 14, d: 10, h: 52, mat: 'glass', neon: 'neon_purple', district: 1 },
+  { x: -18, z: -18, w: 10, d: 14, h: 35, mat: 'concrete', neon: 'neon_pink', district: 1 },
+  { x: 28, z: 0, w: 8, d: 8, h: 28, mat: 'glass', neon: 'neon_blue', district: 1 },
+  { x: -28, z: 0, w: 8, d: 8, h: 22, mat: 'concrete', neon: 'neon_green', district: 1 },
+  { x: 0, z: 28, w: 8, d: 8, h: 30, mat: 'glass', neon: 'neon_purple', district: 1 },
+  { x: 0, z: -28, w: 8, d: 8, h: 25, mat: 'concrete', neon: 'neon_blue', district: 1 },
+  // District 2 — NE
+  { x: 55, z: 55, w: 16, d: 16, h: 60, mat: 'glass', neon: 'neon_blue', district: 2 },
+  { x: 65, z: 45, w: 10, d: 12, h: 32, mat: 'concrete', neon: 'neon_pink', district: 2 },
+  { x: 45, z: 65, w: 12, d: 10, h: 28, mat: 'glass', neon: 'neon_green', district: 2 },
+  { x: 55, z: 70, w: 8, d: 8, h: 20, mat: 'concrete', neon: 'neon_purple', district: 2 },
+  { x: 70, z: 55, w: 8, d: 8, h: 18, mat: 'concrete', neon: 'neon_blue', district: 2 },
+  // District 3 — NW
+  { x: -55, z: 55, w: 14, d: 14, h: 44, mat: 'glass', neon: 'neon_green', district: 3 },
+  { x: -65, z: 45, w: 10, d: 10, h: 30, mat: 'concrete', neon: 'neon_purple', district: 3 },
+  { x: -48, z: 65, w: 12, d: 8, h: 22, mat: 'glass', neon: 'neon_blue', district: 3 },
+  // District 4 — SE
+  { x: 55, z: -55, w: 12, d: 14, h: 40, mat: 'glass', neon: 'neon_pink', district: 4 },
+  { x: 65, z: -65, w: 10, d: 10, h: 26, mat: 'concrete', neon: 'neon_purple', district: 4 },
+  { x: 48, z: -70, w: 8, d: 10, h: 18, mat: 'glass', neon: 'neon_blue', district: 4 },
+  // District 5 — SW
+  { x: -55, z: -55, w: 14, d: 12, h: 48, mat: 'glass', neon: 'neon_blue', district: 5 },
+  { x: -65, z: -65, w: 10, d: 10, h: 34, mat: 'concrete', neon: 'neon_green', district: 5 },
+  { x: -48, z: -68, w: 8, d: 8, h: 20, mat: 'glass', neon: 'neon_pink', district: 5 },
+  // Scattered mid blocks
+  { x: 35, z: 20, w: 8, d: 8, h: 16, mat: 'concrete', neon: 'neon_blue', district: 1 },
+  { x: -35, z: -20, w: 8, d: 8, h: 14, mat: 'concrete', neon: 'neon_green', district: 1 },
+  { x: 20, z: -35, w: 8, d: 8, h: 18, mat: 'glass', neon: 'neon_purple', district: 1 },
+  { x: -20, z: 35, w: 8, d: 8, h: 16, mat: 'glass', neon: 'neon_pink', district: 1 },
+];
+
+const neonColors = {
+  neon_purple: 0x7c3aed, neon_blue: 0x3b82f6, neon_green: 0x4ade80, neon_pink: 0xec4899
+};
+
+BUILDING_CONFIGS.forEach(b => {
+  const matObj = b.mat === 'glass' ? mats.glass : mats.concrete;
+  // Main building
+  const building = box(b.w, b.h, b.d, matObj, b.x, b.h / 2, b.z);
+  // Neon roof strip
+  const neonMat = new THREE.MeshBasicMaterial({ color: neonColors[b.neon] });
+  box(b.w + 0.3, 0.3, b.d + 0.3, neonMat, b.x, b.h + 0.15, b.z, false);
+  // Windows (emissive planes on face)
+  const winMat = new THREE.MeshBasicMaterial({ color: neonColors[b.neon], transparent: true, opacity: 0.15 });
+  for (let floor = 1; floor < Math.floor(b.h / 4); floor++) {
+    if (Math.random() > 0.3) {
+      const wm = new THREE.Mesh(new THREE.PlaneGeometry(b.w * 0.8, 1.5), winMat);
+      wm.position.set(b.x, floor * 4, b.z - b.d / 2 - 0.01);
+      scene.add(wm);
+    }
+  }
+});
+
+// ─── STREET LIGHTS ─────────────────────────────────────────────────────────
+const lightPositions = [
+  [10,0],[−10,0],[30,0],[−30,0],[0,10],[0,−10],[0,30],[0,−30],
+  [10,40],[−10,40],[10,−40],[−10,−40],[40,10],[40,−10],[−40,10],[−40,−10],
+];
+lightPositions.forEach(([x,z]) => {
+  // Post
+  box(0.2, 5, 0.2, mats.concrete, x, 2.5, z, false);
+  // Head
+  box(1.5, 0.2, 0.3, mats.white, x, 5.1, z, false);
+  // Point light
+  const pl = new THREE.PointLight(0x4466ff, 1.2, 18);
+  pl.position.set(x, 5, z);
+  scene.add(pl);
+});
+
+// ─── STARS ────────────────────────────────────────────────────────────────
+const starGeo = new THREE.BufferGeometry();
+const starCount = 2000;
+const starPos = new Float32Array(starCount * 3);
+for (let i = 0; i < starCount * 3; i++) {
+  starPos[i] = (Math.random() - 0.5) * 800;
+}
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.3 });
+scene.add(new THREE.Points(starGeo, starMat));
+
+// ─── PLAYER AVATAR SYSTEM ──────────────────────────────────────────────────
+const avatarColors = [0x7c3aed, 0x3b82f6, 0xec4899, 0x4ade80, 0xf59e0b, 0x06b6d4];
+function getAvatarColor(walletAddr) {
+  if (!walletAddr) return 0x7c3aed;
+  const hash = parseInt(walletAddr.slice(-4), 16);
+  return avatarColors[hash % avatarColors.length];
+}
+
+function createAvatar(color = 0x7c3aed, isLocal = false) {
+  const group = new THREE.Group();
+  const c = color;
+  // Body
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.9, 0.3), new THREE.MeshLambertMaterial({ color: c }));
+  body.position.y = 0.9;
+  group.add(body);
+  // Head
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.45, 0.45), new THREE.MeshLambertMaterial({ color: 0xffcc99 }));
+  head.position.y = 1.6;
+  group.add(head);
+  // Eyes
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+  const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.05), eyeMat);
+  eyeL.position.set(-0.1, 1.62, 0.23);
+  group.add(eyeL);
+  const eyeR = eyeL.clone(); eyeR.position.set(0.1, 1.62, 0.23);
+  group.add(eyeR);
+  // Legs
+  const legMat = new THREE.MeshLambertMaterial({ color: 0x222244 });
+  const legL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.7, 0.25), legMat);
+  legL.position.set(-0.17, 0.35, 0);
+  group.add(legL);
+  const legR = legL.clone(); legR.position.set(0.17, 0.35, 0);
+  group.add(legR);
+  // Arms
+  const armMat = new THREE.MeshLambertMaterial({ color: c });
+  const armL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.7, 0.2), armMat);
+  armL.position.set(-0.42, 0.95, 0);
+  group.add(armL);
+  const armR = armL.clone(); armR.position.set(0.42, 0.95, 0);
+  group.add(armR);
+  // Nametag (for remote players)
+  if (!isLocal) {
+    const tagGeo = new THREE.PlaneGeometry(1.2, 0.3);
+    const tagMat = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.8, side: THREE.DoubleSide });
+    const tag = new THREE.Mesh(tagGeo, tagMat);
+    tag.position.y = 2.2;
+    tag.name = 'nametag';
+    group.add(tag);
+  }
+  group.castShadow = true;
+  return group;
+}
+
+// ─── LOCAL PLAYER ─────────────────────────────────────────────────────────
+let localPlayer = { x: 0, y: 0, z: 5, rotY: 0, wallet: null, color: 0x7c3aed };
+let localAvatar = null; // 3rd-person visible avatar (not rendered in 1st person)
+
+// ─── MOVEMENT ─────────────────────────────────────────────────────────────
+const keys = {};
+document.addEventListener('keydown', e => { keys[e.code] = true; });
+document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+// Mouse look
+let yaw = 0, pitch = 0;
+let pointerLocked = false;
+renderer.domElement.addEventListener('click', () => {
+  if (!worldEntered) return;
+  renderer.domElement.requestPointerLock();
+});
+document.addEventListener('pointerlockchange', () => {
+  pointerLocked = document.pointerLockElement === renderer.domElement;
+});
+document.addEventListener('mousemove', e => {
+  if (!pointerLocked) return;
+  yaw -= e.movementX * 0.002;
+  pitch -= e.movementY * 0.002;
+  pitch = Math.max(-0.6, Math.min(0.4, pitch));
+});
+
+// ─── REMOTE PLAYERS ───────────────────────────────────────────────────────
+const remotePlayers = {}; // key: peerId → { avatar, data }
+
+function updateRemotePlayer(peerId, data) {
+  if (!data || !data.x) return;
+  if (peerId === getMyPeerId()) return;
+  if (!remotePlayers[peerId]) {
+    const color = getAvatarColor(data.wallet || peerId);
+    const avatar = createAvatar(color, false);
+    scene.add(avatar);
+    remotePlayers[peerId] = { avatar, data, lastSeen: Date.now() };
+  }
+  const rp = remotePlayers[peerId];
+  rp.avatar.position.set(data.x, data.y, data.z);
+  rp.avatar.rotation.y = data.rotY || 0;
+  rp.data = data;
+  rp.lastSeen = Date.now();
+  updateNearbyUI();
+}
+
+function pruneRemotePlayers() {
+  const now = Date.now();
+  Object.keys(remotePlayers).forEach(id => {
+    if (now - remotePlayers[id].lastSeen > 8000) {
+      scene.remove(remotePlayers[id].avatar);
+      delete remotePlayers[id];
+    }
+  });
+}
+
+function updateNearbyUI() {
+  const list = document.getElementById('nearby-list');
+  const entries = Object.entries(remotePlayers);
+  if (entries.length === 0) {
+    list.innerHTML = '<span style="color:#4a4a6a;font-size:12px;">No players nearby</span>';
+    document.getElementById('player-count').textContent = '1 player online';
+    return;
+  }
+  document.getElementById('player-count').textContent = `${entries.length + 1} players online`;
+  list.innerHTML = entries.map(([id, rp]) => {
+    const dx = rp.data.x - localPlayer.x;
+    const dz = rp.data.z - localPlayer.z;
+    const dist = Math.round(Math.sqrt(dx*dx + dz*dz));
+    const name = rp.data.wallet ? rp.data.wallet.slice(0,6)+'...' : id.slice(0,6)+'...';
+    const col = '#' + getAvatarColor(rp.data.wallet || id).toString(16).padStart(6,'0');
+    return `<div class="player-entry">
+      <div class="player-dot" style="background:${col}"></div>
+      <span class="player-name">${name}</span>
+      <span class="player-dist">${dist}m</span>
+    </div>`;
+  }).join('');
+}
+
+// ─── GUN.JS P2P ───────────────────────────────────────────────────────────
+let gun = null;
+let worldNode = null;
+let myPeerId = 'peer_' + Math.random().toString(36).slice(2, 10);
+function getMyPeerId() { return myPeerId; }
+
+function initGun() {
+  try {
+    gun = Gun(['https://gun-manhattan.herokuapp.com/gun', 'https://gun-us.herokuapp.com/gun']);
+    worldNode = gun.get('crossrealm_world_v1');
+    // Listen for other players
+    worldNode.get('players').map().on((data, peerId) => {
+      if (data) updateRemotePlayer(peerId, data);
+    });
+    console.log('[CrossRealm] Gun.js P2P connected');
+  } catch(e) {
+    console.warn('[CrossRealm] Gun.js offline — local mode only');
+  }
+}
+
+let lastBroadcast = 0;
+function broadcastPosition() {
+  const now = Date.now();
+  if (now - lastBroadcast < 100) return; // 10 Hz max
+  lastBroadcast = now;
+  if (!gun || !worldNode) return;
+  try {
+    worldNode.get('players').get(myPeerId).put({
+      x: Math.round(localPlayer.x * 10) / 10,
+      y: Math.round(localPlayer.y * 10) / 10,
+      z: Math.round(localPlayer.z * 10) / 10,
+      rotY: Math.round(yaw * 100) / 100,
+      wallet: localPlayer.wallet || null,
+      color: localPlayer.color,
+      ts: now
+    });
+  } catch(e) {}
+}
+
+// ─── WALLET CONNECTION ─────────────────────────────────────────────────────
+let walletConnected = false;
+async function connectWallet() {
+  if (typeof window.ethereum === 'undefined') {
+    // Demo mode — generate fake wallet
+    const fakeAddr = '0x' + [...Array(40)].map(() => Math.floor(Math.random()*16).toString(16)).join('');
+    onWalletConnected(fakeAddr, '1250');
+    return;
+  }
+  try {
+    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    const addr = accounts[0];
+    onWalletConnected(addr, '1250'); // REALM balance would be fetched from contract
+  } catch(e) {
+    console.error('Wallet connect failed', e);
+  }
+}
+
+function onWalletConnected(addr, balance) {
+  walletConnected = true;
+  localPlayer.wallet = addr;
+  localPlayer.color = getAvatarColor(addr);
+  document.getElementById('wallet-addr').textContent = addr.slice(0,6) + '...' + addr.slice(-4);
+  document.getElementById('realm-bal').textContent = parseFloat(balance).toLocaleString();
+  document.getElementById('connect-btn').style.display = 'none';
+  document.getElementById('wallet-info').style.display = 'block';
+  document.getElementById('overlay-wallet-status').textContent = '✅ ' + addr.slice(0,6) + '...' + addr.slice(-4) + ' connected';
+  document.getElementById('enter-btn').classList.remove('disabled');
+}
+
+// ─── WORLD ENTRY ──────────────────────────────────────────────────────────
+let worldEntered = false;
+async function enterWorld() {
+  if (!walletConnected) {
+    await connectWallet();
+    setTimeout(doEnterWorld, 500);
+  } else {
+    doEnterWorld();
+  }
+}
+
+function doEnterWorld() {
+  worldEntered = true;
+  document.getElementById('connect-overlay').style.display = 'none';
+  // Spawn local avatar visual (behind camera)
+  localAvatar = createAvatar(localPlayer.color, true);
+  localAvatar.visible = false; // hide in 1st person — show in future 3rd person toggle
+  scene.add(localAvatar);
+  renderer.domElement.requestPointerLock();
+}
+
+// ─── MINIMAP ──────────────────────────────────────────────────────────────
+const minimapCtx = document.getElementById('minimap-canvas').getContext('2d');
+function drawMinimap() {
+  const ctx = minimapCtx;
+  const W = 160, H = 160;
+  const scale = W / 200; // 200 world units → 160px
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#050510';
+  ctx.fillRect(0, 0, W, H);
+  // Roads
+  ctx.fillStyle = '#111118';
+  ctx.fillRect(0, H/2 - 3, W, 6); // EW
+  ctx.fillRect(W/2 - 3, 0, 6, H); // NS
+  // Buildings
+  BUILDING_CONFIGS.forEach(b => {
+    const x = (b.x + 100) * scale; const z = (b.z + 100) * scale;
+    const w = b.w * scale; const d = b.d * scale;
+    ctx.fillStyle = neonColors[b.neon] ? '#' + neonColors[b.neon].toString(16).padStart(6,'0') : '#7c3aed';
+    ctx.globalAlpha = 0.5;
+    ctx.fillRect(x - w/2, z - d/2, w, d);
+    ctx.globalAlpha = 1;
+  });
+  // Remote players
+  Object.values(remotePlayers).forEach(rp => {
+    const x = (rp.data.x + 100) * scale;
+    const z = (rp.data.z + 100) * scale;
+    const col = '#' + getAvatarColor(rp.data.wallet || '').toString(16).padStart(6, '0');
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(x, z, 3, 0, Math.PI*2); ctx.fill();
+  });
+  // Local player
+  const lx = (localPlayer.x + 100) * scale;
+  const lz = (localPlayer.z + 100) * scale;
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.arc(lx, lz, 4, 0, Math.PI*2); ctx.fill();
+  // Direction indicator
+  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(lx, lz);
+  ctx.lineTo(lx + Math.sin(yaw) * 8, lz + Math.cos(yaw) * 8);
+  ctx.stroke();
+}
+
+// ─── ZONE DETECTION ───────────────────────────────────────────────────────
+const DISTRICTS = [
+  { name: 'DOWNTOWN — DISTRICT 1', cx: 0, cz: 0, r: 38 },
+  { name: 'NORTHGATE — DISTRICT 2', cx: 55, cz: 55, r: 30 },
+  { name: 'WESTPORT — DISTRICT 3', cx: -55, cz: 55, r: 30 },
+  { name: 'EASTSIDE — DISTRICT 4', cx: 55, cz: -55, r: 30 },
+  { name: 'SOUTHEND — DISTRICT 5', cx: -55, cz: -55, r: 30 },
+];
+let currentZone = 'OPEN WORLD';
+function detectZone() {
+  for (const d of DISTRICTS) {
+    const dx = localPlayer.x - d.cx;
+    const dz = localPlayer.z - d.cz;
+    if (Math.sqrt(dx*dx + dz*dz) < d.r) {
+      if (currentZone !== d.name) {
+        currentZone = d.name;
+        document.getElementById('zone-label').textContent = currentZone;
+      }
+      return;
+    }
+  }
+  if (currentZone !== 'OPEN WORLD') {
+    currentZone = 'OPEN WORLD';
+    document.getElementById('zone-label').textContent = '';
+  }
+}
+
+// ─── TRADE PROXIMITY ──────────────────────────────────────────────────────
+let tradePromptCooldown = 0;
+function checkProximityTrade() {
+  if (Date.now() < tradePromptCooldown) return;
+  for (const rp of Object.values(remotePlayers)) {
+    const dx = rp.data.x - localPlayer.x;
+    const dz = rp.data.z - localPlayer.z;
+    if (Math.sqrt(dx*dx + dz*dz) < 3) {
+      const name = rp.data.wallet ? rp.data.wallet.slice(0,6)+'...' : 'Player';
+      document.getElementById('trade-msg').textContent = `${name} is nearby — initiate a trade?`;
+      document.getElementById('trade-prompt').style.display = 'block';
+      tradePromptCooldown = Date.now() + 15000;
+      return;
+    }
+  }
+}
+function closeTrade() { document.getElementById('trade-prompt').style.display = 'none'; }
+
+// ─── ANIMATION HELPERS ────────────────────────────────────────────────────
+let walkT = 0;
+function animateRemoteAvatars(delta) {
+  Object.values(remotePlayers).forEach(rp => {
+    // Bob legs slightly if moving
+    const av = rp.avatar;
+    const legs = av.children.filter((c, i) => i === 3 || i === 4);
+    if (legs.length === 2) {
+      legs[0].rotation.x = Math.sin(Date.now() * 0.004) * 0.3;
+      legs[1].rotation.x = -Math.sin(Date.now() * 0.004) * 0.3;
+    }
+  });
+}
+
+// ─── COLLISION (simple AABB) ───────────────────────────────────────────────
+function checkCollision(nx, nz) {
+  for (const b of BUILDING_CONFIGS) {
+    const hw = b.w / 2 + 0.5;
+    const hd = b.d / 2 + 0.5;
+    if (nx > b.x - hw && nx < b.x + hw && nz > b.z - hd && nz < b.z + hd) return true;
+  }
+  if (Math.abs(nx) > 95 || Math.abs(nz) > 95) return true;
+  return false;
+}
+
+// ─── CITY PREVIEW SILHOUETTE ──────────────────────────────────────────────
+(function buildSilhouette() {
+  const el = document.getElementById('silhouette');
+  if (!el) return;
+  const heights = [60,40,80,30,55,70,35,90,45,25,65,50,38,72,28,58,42,66,34,48,76,32,62,44,56];
+  heights.forEach(h => {
+    const div = document.createElement('div');
+    div.className = 'building';
+    div.style.width = `${Math.floor(4 + Math.random() * 10)}px`;
+    div.style.height = `${h}px`;
+    el.appendChild(div);
+  });
+})();
+
+// ─── MAIN LOOP ────────────────────────────────────────────────────────────
+const clock = new THREE.Clock();
+let pruneTimer = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const delta = clock.getDelta();
+
+  if (worldEntered) {
+    // Movement
+    const speed = keys['ShiftLeft'] || keys['ShiftRight'] ? 12 : 6;
+    const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+    const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+    let moved = false;
+
+    let nx = localPlayer.x;
+    let nz = localPlayer.z;
+    if (keys['KeyW'] || keys['ArrowUp'])    { nx += forward.x * speed * delta; nz += forward.z * speed * delta; moved = true; }
+    if (keys['KeyS'] || keys['ArrowDown'])  { nx -= forward.x * speed * delta; nz -= forward.z * speed * delta; moved = true; }
+    if (keys['KeyA'] || keys['ArrowLeft'])  { nx -= right.x * speed * delta;   nz -= right.z * speed * delta;   moved = true; }
+    if (keys['KeyD'] || keys['ArrowRight']) { nx += right.x * speed * delta;   nz += right.z * speed * delta;   moved = true; }
+
+    if (!checkCollision(nx, nz)) {
+      localPlayer.x = nx;
+      localPlayer.z = nz;
+    }
+    localPlayer.rotY = yaw;
+
+    // Camera follows player
+    camera.position.set(localPlayer.x, 2.2, localPlayer.z);
+    camera.rotation.order = 'YXZ';
+    camera.rotation.y = yaw;
+    camera.rotation.x = pitch;
+
+    // Leg walk animation
+    if (moved) walkT += delta * 8;
+
+    // Broadcast
+    broadcastPosition();
+
+    // Zone
+    detectZone();
+
+    // Trade check
+    if (keys['KeyE']) checkProximityTrade();
+
+    // Prune
+    pruneTimer += delta;
+    if (pruneTimer > 5) { pruneRemotePlayers(); pruneTimer = 0; }
+
+    animateRemoteAvatars(delta);
+    drawMinimap();
+  }
+
+  renderer.render(scene, camera);
+}
+
+// ─── RESIZE ───────────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+animate();
+
+// Demo: add a couple of simulated remote players for preview
+setTimeout(() => {
+  updateRemotePlayer('demo_player_1', { x: 12, y: 0, z: 8, rotY: 1.2, wallet: '0xdemo1234abcd', color: 0x3b82f6 });
+  updateRemotePlayer('demo_player_2', { x: -8, y: 0, z: 15, rotY: 2.5, wallet: '0xdemo5678efgh', color: 0xec4899 });
+}, 2000);
+
+</script>
+
+</body>
+</html>
