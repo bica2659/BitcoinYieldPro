@@ -57,11 +57,11 @@
 <div class="page">
 
   <h1>🔐 CrossRealm — Safe Transaction Signer</h1>
-  <div class="sub">Gnosis Safe v1.3.0 · Core Chain · 0xf88104BDaD09209600298B922193DB4351D104f8</div>
+  <div class="sub">Gnosis Safe v1.3.0 · Core Chain 1116 · 0xf88104BDaD09209600298B922193DB4351D104f8</div>
 
   <div class="warning">
     ⚠️ <strong>Core Safe — no app.safe.global (Core Chain not listed).</strong><br>
-    This page calls the Safe contract directly on Core Mainnet.<br><br>
+    This page signs via EIP-712 typed data and calls the Safe contract directly.<br><br>
     <strong>Any 2 of these 3 wallets can sign and execute:</strong><br>
     &nbsp;Signer 1: 0x73a6eA93A7BF0FC9F8D3C997AEDD046A6ED79054<br>
     &nbsp;Signer 2: 0x7ADB4852C70FB86d906deB082604Fc338C067135<br>
@@ -71,12 +71,11 @@
   <div class="note">
     <strong style="color:#60a5fa">HOW TO USE:</strong><br>
     1. Signer A connects → clicks <strong>SIGN</strong> on each tx → clicks <strong>COPY SIG</strong> → sends to Signer B via Telegram<br>
-    2. Signer B connects → clicks <strong>SIGN</strong> on each tx → pastes Signer A's sig in the box → clicks <strong>EXECUTE</strong><br>
-    3. Safe confirms 2-of-3 threshold and executes on Core Chain — no app.safe.global needed<br><br>
-    <strong style="color:#f0b429">Note:</strong> Safe v1.3.0 — signatures are adjusted automatically (v += 4 for eth_sign compatibility).
+    2. Signer B connects → clicks <strong>SIGN</strong> on each tx → pastes Signer A's sig → clicks <strong>EXECUTE</strong><br>
+    3. Executes directly on Core Chain — no app.safe.global needed<br><br>
+    <strong style="color:#f0b429">Signing method:</strong> EIP-712 typed data (same as Safe SDK — no v adjustment quirks)
   </div>
 
-  <!-- CONNECT -->
   <div class="card">
     <div class="card-title">WALLET</div>
     <div class="conn-badge" id="connBadge"></div>
@@ -84,13 +83,11 @@
     <div class="status" id="connectStatus"></div>
   </div>
 
-  <!-- SAFE STATE -->
   <div class="card" id="safeStateCard" style="display:none">
     <div class="card-title">SAFE STATE</div>
     <div id="safeState"></div>
   </div>
 
-  <!-- TRANSACTIONS -->
   <div id="txSection" style="display:none">
     <div class="section-label">6 Transactions — execute in order (1 → 6)</div>
     <div id="txList"></div>
@@ -109,13 +106,34 @@ const SIGNERS   = [
 ];
 const CHAIN_ID = 1116;
 
-// Safe v1.3.0 ABI
+// ── EIP-712 DOMAIN & TYPES FOR SAFE v1.3.0 ────────────────────────────
+// Safe v1.3.0 domain does NOT include name/version — only chainId + contract
+const SAFE_DOMAIN = {
+  chainId: CHAIN_ID,
+  verifyingContract: SAFE_ADDR,
+};
+
+const SAFE_TX_TYPES = {
+  SafeTx: [
+    { name: "to",               type: "address" },
+    { name: "value",            type: "uint256" },
+    { name: "data",             type: "bytes"   },
+    { name: "operation",        type: "uint8"   },
+    { name: "safeTxGas",        type: "uint256" },
+    { name: "baseGas",          type: "uint256" },
+    { name: "gasPrice",         type: "uint256" },
+    { name: "gasToken",         type: "address" },
+    { name: "refundReceiver",   type: "address" },
+    { name: "nonce",            type: "uint256" },
+  ],
+};
+
+// ── SAFE ABI ──────────────────────────────────────────────────────────
 const SAFE_ABI = [
   "function nonce() view returns (uint256)",
   "function getThreshold() view returns (uint256)",
   "function VERSION() view returns (string)",
-  "function getTransactionHash(address to,uint256 value,bytes calldata data,uint8 operation,uint256 safeTxGas,uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,uint256 _nonce) view returns (bytes32)",
-  "function execTransaction(address to,uint256 value,bytes calldata data,uint8 operation,uint256 safeTxGas,uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,bytes memory signatures) payable returns (bool success)",
+  "function execTransaction(address to, uint256 value, bytes calldata data, uint8 operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address refundReceiver, bytes memory signatures) payable returns (bool success)",
 ];
 
 // ── TRANSACTION CALLDATA ───────────────────────────────────────────────
@@ -133,36 +151,36 @@ const TXS = [
   {
     label:  "GameHub.setVerifierApproved — 8-Ball",
     to:     "0xc69c7A7965Cab26fbac1991cC0faDD45a1C80F63",
-    data:   iface.hub.encodeFunctionData("setVerifierApproved", [
-              "0x94d389b5F0745cA7CB7F83c17A7554D780Ea0B15", true]),
+    data:   iface.hub.encodeFunctionData("setVerifierApproved",
+              ["0x94d389b5F0745cA7CB7F83c17A7554D780Ea0B15", true]),
     effect: "Activates 8-Ball Pool — players can start wagering",
   },
   {
     label:  "GameHub.setVerifierApproved — Penalty",
     to:     "0xc69c7A7965Cab26fbac1991cC0faDD45a1C80F63",
-    data:   iface.hub.encodeFunctionData("setVerifierApproved", [
-              "0x8DeC1D560f807E557E8533888270fFf59f7963Da", true]),
+    data:   iface.hub.encodeFunctionData("setVerifierApproved",
+              ["0x8DeC1D560f807E557E8533888270fFf59f7963Da", true]),
     effect: "Activates Penalty Shootout",
   },
   {
     label:  "CrossRealmNFT.setTournamentContract",
     to:     "0x3E07C5b214BA6A887a15889d848d7E8772F4B66C",
-    data:   iface.nft.encodeFunctionData("setTournamentContract", [
-              "0x32BE7b5Bd260aa322e35ad5b24Ce2A9FA1Ca34Ae"]),
+    data:   iface.nft.encodeFunctionData("setTournamentContract",
+              ["0x32BE7b5Bd260aa322e35ad5b24Ce2A9FA1Ca34Ae"]),
     effect: "Wires Tournament_REALM — enables champion NFT minting",
   },
   {
     label:  "Rewards Proxy — upgradeTo(v5)",
     to:     "0x0C5Da3622e42efE0C579ef758BC8f3144018Dfc1",
-    data:   iface.rewards.encodeFunctionData("upgradeTo", [
-              "0xfc9f16f396685dFCC31409e03Cf43828be077774"]),
+    data:   iface.rewards.encodeFunctionData("upgradeTo",
+              ["0xfc9f16f396685dFCC31409e03Cf43828be077774"]),
     effect: "Upgrades Rewards proxy to v5 — adds Private LP vault slots",
   },
   {
     label:  "Rewards Proxy — setPrivateLPVault",
     to:     "0x0C5Da3622e42efE0C579ef758BC8f3144018Dfc1",
-    data:   iface.rewards.encodeFunctionData("setPrivateLPVault", [
-              "0x7f1E6F98810917F03D0d90E5DbefEd40F3EBC62a"]),
+    data:   iface.rewards.encodeFunctionData("setPrivateLPVault",
+              ["0x7f1E6F98810917F03D0d90E5DbefEd40F3EBC62a"]),
     effect: "Points Rewards v5 at PrivateLPVault_v2",
   },
   {
@@ -174,8 +192,9 @@ const TXS = [
 ];
 
 // ── STATE ──────────────────────────────────────────────────────────────
-let provider, signer, safe, userAddr, safeNonce = 0, baseNonce = 0;
-const mySigs = {};   // idx -> { rawSig, adjustedSig, signerAddr }
+let provider, signer, safe, userAddr;
+let baseNonce = 0;   // locked at connect time — never changes during session
+const mySigs  = {};  // idx -> { sig, signerAddr }
 
 function toast(msg, type) {
   const el = document.getElementById("globalStatus");
@@ -183,7 +202,7 @@ function toast(msg, type) {
   el.innerHTML = msg;
 }
 function txToast(idx, msg, type) {
-  const el = document.getElementById("txstatus-"+idx);
+  const el = document.getElementById("txstatus-" + idx);
   el.className = "status " + type;
   el.innerHTML = msg;
 }
@@ -191,7 +210,7 @@ function txToast(idx, msg, type) {
 // ── CONNECT ────────────────────────────────────────────────────────────
 async function connectWallet() {
   try {
-    if (!window.ethereum) return toast("MetaMask not found — install it first", "err");
+    if (!window.ethereum) return toast("MetaMask not found", "err");
     provider = new ethers.providers.Web3Provider(window.ethereum);
     await provider.send("eth_requestAccounts", []);
     let net = await provider.getNetwork();
@@ -199,11 +218,11 @@ async function connectWallet() {
       try {
         await window.ethereum.request({
           method: "wallet_switchEthereumChain",
-          params: [{ chainId: "0x45C" }]
+          params: [{ chainId: "0x45C" }],
         });
         provider = new ethers.providers.Web3Provider(window.ethereum);
       } catch(e) {
-        return toast("Please switch MetaMask to Core Mainnet (Chain ID 1116)", "err");
+        return toast("Switch MetaMask to Core Mainnet (Chain ID 1116)", "err");
       }
     }
     signer   = provider.getSigner();
@@ -211,17 +230,17 @@ async function connectWallet() {
     safe     = new ethers.Contract(SAFE_ADDR, SAFE_ABI, signer);
 
     const isSigner = SIGNERS.includes(userAddr);
-    const badge = document.getElementById("connBadge");
-    badge.style.display  = "block";
+    const badge    = document.getElementById("connBadge");
+    badge.style.display    = "block";
     badge.style.background = isSigner ? "#0a1a0a" : "#1a1000";
-    badge.style.border   = isSigner ? "1px solid #22c55e30" : "1px solid #f0b42940";
-    badge.style.color    = isSigner ? "#4ade80" : "#f0b429";
-    badge.textContent    = isSigner
-      ? `✅ Signer ${SIGNERS.indexOf(userAddr)+1} of 3 connected: ${userAddr.slice(0,10)}...${userAddr.slice(-6)}`
-      : `⚠️ ${userAddr.slice(0,10)}... — not a registered Safe signer`;
+    badge.style.border     = isSigner ? "1px solid #22c55e30" : "1px solid #f0b42940";
+    badge.style.color      = isSigner ? "#4ade80" : "#f0b429";
+    badge.textContent      = isSigner
+      ? `✅ Signer ${SIGNERS.indexOf(userAddr)+1} of 3: ${userAddr.slice(0,10)}...${userAddr.slice(-6)}`
+      : `⚠️ ${userAddr.slice(0,10)}... — not a Safe signer`;
 
     document.getElementById("connectBtn").textContent =
-      userAddr.slice(0,8)+"..."+userAddr.slice(-6);
+      userAddr.slice(0,8) + "..." + userAddr.slice(-6);
 
     await loadSafeState();
     renderTxs();
@@ -236,27 +255,44 @@ async function loadSafeState() {
     const [nonce, threshold, version] = await Promise.all([
       safe.nonce(),
       safe.getThreshold(),
-      safe.VERSION().catch(() => "unknown"),
+      safe.VERSION().catch(() => "1.3.0"),
     ]);
-    safeNonce = nonce.toNumber(); baseNonce = safeNonce; // locked — never changes for signing
+    // Lock baseNonce once — all tx hashes computed from this value
+    baseNonce = nonce.toNumber();
     document.getElementById("safeState").innerHTML = `
       <div class="info-row"><span class="lbl">Safe address</span><span class="val gold">${SAFE_ADDR}</span></div>
       <div class="info-row"><span class="lbl">Version</span><span class="val gold">${version}</span></div>
-      <div class="info-row"><span class="lbl">Current nonce</span><span class="val blue">${safeNonce}</span></div>
+      <div class="info-row"><span class="lbl">Current nonce (locked)</span><span class="val blue">${baseNonce}</span></div>
       <div class="info-row"><span class="lbl">Threshold</span><span class="val">2 of 3</span></div>
+      <div class="info-row"><span class="lbl">Signing method</span><span class="val">EIP-712 typed data</span></div>
       <div class="info-row"><span class="lbl">Your address</span><span class="val ${SIGNERS.includes(userAddr)?'':'red'}">${userAddr}</span></div>
-      <div class="info-row"><span class="lbl">Is Safe signer</span><span class="val ${SIGNERS.includes(userAddr)?'':'red'}">${SIGNERS.includes(userAddr)?'YES':'NO'}</span></div>
     `;
   } catch(e) {
     document.getElementById("safeState").innerHTML =
-      `<span style="color:#f87171">Error reading Safe state: ${e.message}</span>`;
+      `<span style="color:#f87171">Error: ${e.message}</span>`;
   }
 }
 
-// ── RENDER TX CARDS ────────────────────────────────────────────────────
+// ── BUILD EIP-712 MESSAGE VALUE ────────────────────────────────────────
+function buildSafeTxValue(idx) {
+  const tx = TXS[idx];
+  return {
+    to:             tx.to,
+    value:          0,
+    data:           tx.data,
+    operation:      0,
+    safeTxGas:      0,
+    baseGas:        0,
+    gasPrice:       0,
+    gasToken:       ethers.constants.AddressZero,
+    refundReceiver: ethers.constants.AddressZero,
+    nonce:          baseNonce + idx,
+  };
+}
+
+// ── RENDER ─────────────────────────────────────────────────────────────
 function renderTxs() {
-  const list = document.getElementById("txList");
-  list.innerHTML = TXS.map((tx, i) => `
+  document.getElementById("txList").innerHTML = TXS.map((tx, i) => `
     <div class="tx-card" id="txcard-${i}">
       <div class="tx-header">
         <div class="tx-num">${i+1}</div>
@@ -265,7 +301,7 @@ function renderTxs() {
       </div>
       <div class="tx-detail"><span>To: </span>${tx.to}</div>
       <div class="tx-detail"><span>Effect: </span>${tx.effect}</div>
-      <div class="tx-detail"><span>Safe nonce used: </span><span id="nonce-${i}">${baseNonce + i}</span></div>
+      <div class="tx-detail"><span>Nonce: </span>${baseNonce + i}</div>
       <div class="tx-actions">
         <button class="btn btn-gold"  onclick="signTx(${i})">SIGN</button>
         <button class="btn btn-blue"  onclick="copySig(${i})">COPY SIG</button>
@@ -276,7 +312,7 @@ function renderTxs() {
         <label style="font-size:11px;color:#666">SECOND SIGNER'S SIGNATURE:</label>
         <input type="text" id="sig2-${i}" placeholder="0x... paste from other signer">
         <small>
-          Signer A: SIGN → COPY SIG → send via Telegram/WhatsApp to Signer B.<br>
+          Signer A: SIGN → COPY SIG → send to Signer B.<br>
           Signer B: SIGN → paste A's sig above → EXECUTE.
         </small>
       </div>
@@ -285,157 +321,101 @@ function renderTxs() {
   `).join("");
 }
 
-// ── GET TX HASH FROM SAFE CONTRACT ────────────────────────────────────
-// Safe v1.3.0 getTransactionHash uses EIP-712 with chainId in domain.
-// We call the contract directly — it handles the EIP-712 encoding.
-async function getTxHash(idx) {
-  const tx = TXS[idx];
-  return await safe.getTransactionHash(
-    tx.to,                           // to
-    0,                               // value
-    tx.data,                         // data
-    0,                               // operation (CALL)
-    0,                               // safeTxGas
-    0,                               // baseGas
-    0,                               // gasPrice
-    ethers.constants.AddressZero,    // gasToken
-    ethers.constants.AddressZero,    // refundReceiver
-    baseNonce + idx                  // baseNonce locked at page load — never changes
-  );
-}
-
-// ── ADJUST SIGNATURE FOR SAFE v1.3.0 eth_sign ─────────────────────────
-// When MetaMask signs via eth_sign, it prefixes the hash with
-// "\x19Ethereum Signed Message:\n32" and produces v=27 or v=28.
-// Safe v1.3.0 checkNSignatures() treats:
-//   v = 27/28 → standard ECDSA (no prefix expected)
-//   v = 31/32 → eth_sign (prefix applied by signer)
-// So we add 4 to v so Safe knows to account for MetaMask's prefix.
-function adjustSigForSafe(sig) {
-  const sigBytes = ethers.utils.arrayify(sig);
-  const v = sigBytes[64];
-  if (v === 27 || v === 28) {
-    sigBytes[64] = v + 4;  // 27→31, 28→32
-  }
-  return ethers.utils.hexlify(sigBytes);
-}
-
-// ── SIGN TRANSACTION ──────────────────────────────────────────────────
+// ── SIGN (EIP-712 typed data — no v adjustment needed) ─────────────────
 async function signTx(idx) {
   if (!signer) return toast("Connect wallet first", "err");
   try {
     txToast(idx, "Waiting for MetaMask signature...", "in");
-    const hash = await getTxHash(idx);
 
-    // personal_sign (eth_sign disabled in recent MetaMask) — same prefix behavior \x19Ethereum Signed Message:\n32 prefix
-    const rawSig     = await provider.send("personal_sign", [hash, userAddr]);
-    const adjustedSig = adjustSigForSafe(rawSig);
+    const value = buildSafeTxValue(idx);
 
-    mySigs[idx] = { rawSig, adjustedSig, signerAddr: userAddr };
+    // _signTypedData uses eth_signTypedData_v4 — EIP-712 exact, no prefix
+    // Safe v1.3.0 with v=27/28 recovers against raw EIP-712 hash — perfect match
+    const sig = await signer._signTypedData(SAFE_DOMAIN, SAFE_TX_TYPES, value);
 
-    const out = document.getElementById("sigout-"+idx);
+    mySigs[idx] = { sig, signerAddr: userAddr };
+
+    const out = document.getElementById("sigout-" + idx);
     out.style.display = "block";
     out.style.color   = "#60a5fa";
-    out.innerHTML =
-      `<strong style="color:#888">YOUR SIGNATURE (adjusted for Safe v1.3.0):</strong><br>${adjustedSig}`;
+    out.innerHTML = `<strong style="color:#888">YOUR SIGNATURE (tx ${idx+1}, nonce ${baseNonce+idx}):</strong><br>${sig}`;
 
-    document.getElementById("badge-"+idx).textContent = "SIGNED ✓";
-    document.getElementById("badge-"+idx).className   = "tx-badge signed";
-    txToast(idx,
-      "✅ Signed. Click COPY SIG and send to the second signer via Telegram.", "ok");
+    document.getElementById("badge-" + idx).textContent = "SIGNED ✓";
+    document.getElementById("badge-" + idx).className   = "tx-badge signed";
+    txToast(idx, "✅ Signed. Click COPY SIG → send to second signer via Telegram.", "ok");
 
   } catch(e) {
     txToast(idx, "❌ " + e.message, "err");
   }
 }
 
-// ── COPY SIGNATURE ────────────────────────────────────────────────────
 function copySig(idx) {
-  if (!mySigs[idx]) return txToast(idx, "Sign transaction " + (idx+1) + " first", "err");
-  navigator.clipboard.writeText(mySigs[idx].adjustedSig)
-    .then(() => txToast(idx, "✅ Signature copied — paste in Telegram to other signer", "ok"))
+  if (!mySigs[idx]) return txToast(idx, "Sign first", "err");
+  navigator.clipboard.writeText(mySigs[idx].sig)
+    .then(() => txToast(idx, "✅ Copied — paste in Telegram to other signer", "ok"))
     .catch(() => {
-      // Fallback: select text in sig-out
-      const out = document.getElementById("sigout-"+idx);
+      const out = document.getElementById("sigout-" + idx);
       const range = document.createRange();
       range.selectNodeContents(out);
       window.getSelection().removeAllRanges();
       window.getSelection().addRange(range);
-      txToast(idx, "Selected — press Ctrl+C / Cmd+C to copy", "ok");
+      txToast(idx, "Selected — press Ctrl+C to copy", "ok");
     });
 }
 
-// ── PACK SIGNATURES (sorted by signer address — Safe requirement) ──────
-// Safe v1.3.0 requires signatures sorted ascending by signer address.
-// We recover the address from each adjusted signature to sort correctly.
-function recoverFromAdjusted(hash, adjustedSig) {
+// ── RECOVER SIGNER FROM EIP-712 SIGNATURE ─────────────────────────────
+function recoverSigner(idx, sig) {
   try {
-    // To recover, we need to undo our v adjustment and use the prefixed hash
-    const sigBytes = ethers.utils.arrayify(adjustedSig);
-    const v = sigBytes[64];
-    // v=31/32 means eth_sign: Safe will recover using prefixed hash
-    // We replicate that: adjust v back to 27/28 and use signMessage prefix
-    const recoveryV = v === 31 ? 27 : v === 32 ? 28 : v;
-    const recoverySig = ethers.utils.hexlify(
-      Object.assign([...sigBytes], { 64: recoveryV })
-    );
-    // eth_sign uses the Ethereum prefix
-    const prefixedHash = ethers.utils.hashMessage(ethers.utils.arrayify(hash));
-    return ethers.utils.recoverAddress(prefixedHash, recoverySig).toLowerCase();
+    const value = buildSafeTxValue(idx);
+    return ethers.utils.verifyTypedData(
+      SAFE_DOMAIN, SAFE_TX_TYPES, value, sig
+    ).toLowerCase();
   } catch(e) {
     return null;
   }
 }
 
-function packSignatures(sig1, addr1, sig2, addr2) {
-  // Sort ascending by address
+// ── PACK SIGNATURES (sorted ascending by signer address) ──────────────
+function packSigs(sig1, addr1, sig2, addr2) {
   const [first, second] = addr1.toLowerCase() < addr2.toLowerCase()
     ? [sig1, sig2]
     : [sig2, sig1];
-  // Concatenate: first sig + second sig without 0x
-  return first + second.slice(2);
+  return first + second.slice(2);  // concat without 0x on second
 }
 
-// ── EXECUTE TRANSACTION ───────────────────────────────────────────────
+// ── EXECUTE ────────────────────────────────────────────────────────────
 async function executeTx(idx) {
   if (!signer) return toast("Connect wallet first", "err");
 
-  const mine  = mySigs[idx];
-  const sig2  = document.getElementById("sig2-"+idx).value.trim();
+  const mine = mySigs[idx];
+  const sig2 = document.getElementById("sig2-" + idx).value.trim();
 
   if (!mine) return txToast(idx,
-    "Click SIGN first to generate your signature, then click EXECUTE", "err");
+    "Click SIGN first to generate your signature", "err");
   if (!sig2) return txToast(idx,
-    "Paste the second signer's signature in the box above, then click EXECUTE", "err");
-
-  // Validate sig2 looks like a hex signature
+    "Paste the second signer's signature in the box above", "err");
   if (!sig2.startsWith("0x") || sig2.length < 130) return txToast(idx,
-    "Second signature looks invalid — should be 0x followed by 130 hex chars", "err");
+    "Second signature looks invalid (should start with 0x, 132 chars)", "err");
 
   try {
-    txToast(idx, "Verifying and packing signatures...", "in");
+    txToast(idx, "Recovering signers for address sort...", "in");
 
-    const hash = await getTxHash(idx);
+    // Recover both signer addresses for correct packing order
+    const addr1 = mine.signerAddr;
+    const addr2 = recoverSigner(idx, sig2);
 
-    // Recover signer address from both signatures for correct sorting
-    const myAddr    = mine.signerAddr;
-    const otherAddr = recoverFromAdjusted(hash, sig2);
+    if (!addr2) return txToast(idx,
+      "❌ Cannot recover address from second signature. " +
+      "Make sure both signers used this page and same nonce.", "err");
 
-    if (!otherAddr) {
-      return txToast(idx,
-        "❌ Could not recover address from second signature. " +
-        "Make sure the other signer used this page and copied the adjusted signature.", "err");
-    }
+    if (addr1 === addr2) return txToast(idx,
+      "❌ Both signatures are from the same wallet", "err");
 
-    if (myAddr === otherAddr) {
-      return txToast(idx, "❌ Both signatures are from the same wallet", "err");
-    }
-
-    const packed = packSignatures(mine.adjustedSig, myAddr, sig2, otherAddr);
+    const packed = packSigs(mine.sig, addr1, sig2, addr2);
 
     txToast(idx,
-      `Signer 1: ${myAddr.slice(0,10)}...<br>` +
-      `Signer 2: ${otherAddr.slice(0,10)}...<br>` +
+      `Signer 1: ${addr1.slice(0,10)}...<br>` +
+      `Signer 2: ${addr2.slice(0,10)}...<br>` +
       `Submitting to Core Chain...`, "in");
 
     const tx = TXS[idx];
@@ -449,20 +429,11 @@ async function executeTx(idx) {
     );
 
     txToast(idx, `⏳ Confirming... ${execTx.hash.slice(0,18)}...`, "in");
-    const receipt = await execTx.wait();
+    await execTx.wait();
 
-    document.getElementById("badge-"+idx).textContent = "EXECUTED ✅";
-    document.getElementById("badge-"+idx).className   = "tx-badge executed";
-    txToast(idx,
-      `✅ Transaction ${idx+1} executed!<br>Hash: ${execTx.hash}`, "ok");
-
-    // Refresh nonce for next tx
-    safeNonce = (await safe.nonce()).toNumber(); // display only — baseNonce stays locked
-    // Update displayed nonces
-    TXS.forEach((_, i) => {
-      const el = document.getElementById("nonce-"+i);
-      if (el) el.textContent = safeNonce + i;
-    });
+    document.getElementById("badge-" + idx).textContent = "EXECUTED ✅";
+    document.getElementById("badge-" + idx).className   = "tx-badge executed";
+    txToast(idx, `✅ Transaction ${idx+1} executed!<br>Hash: ${execTx.hash}`, "ok");
 
   } catch(e) {
     const reason = e.reason || e.data?.message || e.message || String(e);
