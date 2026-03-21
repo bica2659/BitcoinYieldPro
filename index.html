@@ -333,6 +333,13 @@ async function signTx(idx) {
     // Safe v1.3.0 with v=27/28 recovers against raw EIP-712 hash — perfect match
     const sig = await signer._signTypedData(SAFE_DOMAIN, SAFE_TX_TYPES, value);
 
+    // Debug: verify we can recover ourselves from this sig
+    const recovered = ethers.utils.verifyTypedData(SAFE_DOMAIN, SAFE_TX_TYPES, value, sig).toLowerCase();
+    console.log(`[Safe] tx ${idx} signed. Signer: ${userAddr}, Recovered: ${recovered}, Match: ${recovered === userAddr}`);
+    if (recovered !== userAddr) {
+      return txToast(idx, `❌ Self-recovery failed — recovered ${recovered} but signer is ${userAddr}. EIP-712 domain mismatch.`, "err");
+    }
+
     mySigs[idx] = { sig, signerAddr: userAddr };
 
     const out = document.getElementById("sigout-" + idx);
@@ -416,17 +423,50 @@ async function executeTx(idx) {
     txToast(idx,
       `Signer 1: ${addr1.slice(0,10)}...<br>` +
       `Signer 2: ${addr2.slice(0,10)}...<br>` +
-      `Submitting to Core Chain...`, "in");
+      `Running dry-run to check signatures...`, "in");
 
     const tx = TXS[idx];
-    const execTx = await safe.execTransaction(
+    const callArgs = [
       tx.to, 0, tx.data,
       0, 0, 0, 0,
       ethers.constants.AddressZero,
       ethers.constants.AddressZero,
       packed,
-      { gasLimit: 400000, type: 0 }
-    );
+    ];
+
+    // Dry run first — catches signature errors, wrong owners, GS codes
+    try {
+      await safe.callStatic.execTransaction(...callArgs, { gasLimit: 400000, type: 0 });
+    } catch(staticErr) {
+      const raw = staticErr.reason || staticErr.data?.message || staticErr.message || String(staticErr);
+      const codes = {
+        "GS001": "Could not finish initialisation",
+        "GS010": "Not enough gas",
+        "GS011": "Invalid gas token",
+        "GS012": "Invalid refund receiver",
+        "GS013": "Hash not approved",
+        "GS020": "Signatures data too short",
+        "GS021": "Invalid contract signature location (inside static part)",
+        "GS022": "Invalid contract signature location (overflows)",
+        "GS023": "Invalid contract signature provided",
+        "GS024": "Invalid signature provided (contract sig missing)",
+        "GS025": "Hash already approved",
+        "GS026": "Invalid owner — signature recovery failed. Signer addresses do not match Safe owners.",
+        "GS030": "Only owner, sender or fallback handler",
+        "GS031": "Handler not registered",
+      };
+      let msg = raw;
+      for (const [code, desc] of Object.entries(codes)) {
+        if (raw.includes(code)) { msg = `${code}: ${desc}`; break; }
+      }
+      return txToast(idx,
+        `❌ Dry-run failed — tx would revert:<br><br>${msg}<br><br>` +
+        `Raw error: ${raw.slice(0, 300)}`, "err");
+    }
+
+    txToast(idx, "✅ Dry-run passed — submitting to Core Chain...", "in");
+
+    const execTx = await safe.execTransaction(...callArgs, { gasLimit: 400000, type: 0 });
 
     txToast(idx, `⏳ Confirming... ${execTx.hash.slice(0,18)}...`, "in");
     await execTx.wait();
