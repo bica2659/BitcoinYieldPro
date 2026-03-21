@@ -73,7 +73,7 @@
     1. Both signers open this page and connect their wallets<br>
     2. Signer A clicks <strong>SIGN</strong> on each tx → clicks <strong>COPY SIG</strong> → sends to Signer B<br>
     3. Signer B clicks <strong>SIGN</strong> on each tx → pastes Signer A's sig → clicks <strong>EXECUTE</strong><br><br>
-    <strong style="color:#f0b429">Method:</strong> Safe.getTransactionHash → personal_sign → v+4 (same method that worked for tx 1)
+    <strong style="color:#f0b429">Method:</strong> Safe.getTransactionHash → signMessage(arrayify) → v+4
   </div>
 
   <div class="card">
@@ -245,7 +245,7 @@ async function loadSafeState() {
     <div class="info-row"><span class="lbl">Version</span><span class="val gold">${version}</span></div>
     <div class="info-row"><span class="lbl">Nonce (locked)</span><span class="val blue">${baseNonce}</span></div>
     <div class="info-row"><span class="lbl">Threshold</span><span class="val">2 of 3</span></div>
-    <div class="info-row"><span class="lbl">Signing method</span><span class="val">getTransactionHash + personal_sign + v+4</span></div>
+    <div class="info-row"><span class="lbl">Signing method</span><span class="val">getTransactionHash + signMessage(bytes) + v+4</span></div>
     <div class="info-row"><span class="lbl">Your address</span><span class="val ${SIGNERS.includes(userAddr)?'':'red'}">${userAddr}</span></div>
   `;
 }
@@ -320,11 +320,13 @@ async function signTx(idx) {
 
     const hash = txHashes[idx]; // exact bytes32 from Safe.getTransactionHash()
 
-    // personal_sign(message, address) — MetaMask applies prefix, returns v=27/28
-    const rawSig = await provider.send("personal_sign", [hash, userAddr]);
+    // signMessage(bytes) — passes 32 raw bytes, MetaMask prefixes with
+    // "\x19Ethereum Signed Message:\n32" (not \n66 which personal_sign string gets)
+    // This ensures Safe v1.3.0 recovery via v>30 path matches exactly
+    const rawSig = await signer.signMessage(ethers.utils.arrayify(hash));
 
     // Adjust v: 27→31, 28→32
-    // Tells Safe v1.3.0 checkNSignatures to use prefixed recovery
+    // Tells Safe v1.3.0 checkNSignatures to use prefixed recovery (v>30 path)
     const sigBytes = ethers.utils.arrayify(rawSig);
     const v = sigBytes[64];
     if (v === 27 || v === 28) sigBytes[64] = v + 4;
@@ -370,7 +372,7 @@ function recoverSigner(idx, adjustedSig) {
     const recBytes = Uint8Array.from(sigBytes);
     if (v === 31 || v === 32) recBytes[64] = v - 4;
     const recSig = ethers.utils.hexlify(recBytes);
-    // personal_sign uses the prefixed hash
+    // signMessage(bytes) uses hashMessage(bytes) — must match exactly
     const prefixedHash = ethers.utils.hashMessage(ethers.utils.arrayify(hash));
     return ethers.utils.recoverAddress(prefixedHash, recSig).toLowerCase();
   } catch(e) {
