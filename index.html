@@ -174,7 +174,7 @@ const TXS = [
 ];
 
 // ── STATE ──────────────────────────────────────────────────────────────
-let provider, signer, safe, userAddr, safeNonce = 0;
+let provider, signer, safe, userAddr, safeNonce = 0, baseNonce = 0;
 const mySigs = {};   // idx -> { rawSig, adjustedSig, signerAddr }
 
 function toast(msg, type) {
@@ -238,7 +238,7 @@ async function loadSafeState() {
       safe.getThreshold(),
       safe.VERSION().catch(() => "unknown"),
     ]);
-    safeNonce = nonce.toNumber();
+    safeNonce = nonce.toNumber(); baseNonce = safeNonce; // locked — never changes for signing
     document.getElementById("safeState").innerHTML = `
       <div class="info-row"><span class="lbl">Safe address</span><span class="val gold">${SAFE_ADDR}</span></div>
       <div class="info-row"><span class="lbl">Version</span><span class="val gold">${version}</span></div>
@@ -265,7 +265,7 @@ function renderTxs() {
       </div>
       <div class="tx-detail"><span>To: </span>${tx.to}</div>
       <div class="tx-detail"><span>Effect: </span>${tx.effect}</div>
-      <div class="tx-detail"><span>Safe nonce used: </span><span id="nonce-${i}">${safeNonce + i}</span></div>
+      <div class="tx-detail"><span>Safe nonce used: </span><span id="nonce-${i}">${baseNonce + i}</span></div>
       <div class="tx-actions">
         <button class="btn btn-gold"  onclick="signTx(${i})">SIGN</button>
         <button class="btn btn-blue"  onclick="copySig(${i})">COPY SIG</button>
@@ -300,7 +300,7 @@ async function getTxHash(idx) {
     0,                               // gasPrice
     ethers.constants.AddressZero,    // gasToken
     ethers.constants.AddressZero,    // refundReceiver
-    safeNonce + idx                  // nonce (each tx increments)
+    baseNonce + idx                  // baseNonce locked at page load — never changes
   );
 }
 
@@ -457,7 +457,7 @@ async function executeTx(idx) {
       `✅ Transaction ${idx+1} executed!<br>Hash: ${execTx.hash}`, "ok");
 
     // Refresh nonce for next tx
-    safeNonce = (await safe.nonce()).toNumber();
+    safeNonce = (await safe.nonce()).toNumber(); // display only — baseNonce stays locked
     // Update displayed nonces
     TXS.forEach((_, i) => {
       const el = document.getElementById("nonce-"+i);
