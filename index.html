@@ -327,8 +327,8 @@ async function signTx(idx) {
     txToast(idx, "Waiting for MetaMask signature...", "in");
     const hash = await getTxHash(idx);
 
-    // eth_sign: MetaMask applies \x19Ethereum Signed Message:\n32 prefix
-    const rawSig     = await provider.send("eth_sign", [userAddr, hash]);
+    // personal_sign (eth_sign disabled in recent MetaMask) — same prefix behavior \x19Ethereum Signed Message:\n32 prefix
+    const rawSig     = await provider.send("personal_sign", [hash, userAddr]);
     const adjustedSig = adjustSigForSafe(rawSig);
 
     mySigs[idx] = { rawSig, adjustedSig, signerAddr: userAddr };
